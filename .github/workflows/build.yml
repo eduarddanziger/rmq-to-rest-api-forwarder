@@ -1,0 +1,112 @@
+name: Build and save artifacts
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'Release-*'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}  # Output the VERSION variable
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+  
+    - name: Unshallow repository
+      run: git fetch --prune --unshallow
+
+    - name: Get version from Git tags
+      shell: pwsh
+      id: get_version
+      run: |
+        # Get the latest Release tag
+        $LATEST_TAG = git describe --tags --match "Release-*" --abbrev=0
+        if (-not $LATEST_TAG) {
+            Write-Output "No Release tag found. Using default version."
+            "VERSION=1.0.0" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+        }
+        Write-Output "LATEST_TAG: $LATEST_TAG"
+
+        # Extract version number from the tag (e.g., Release-1.0.1 -> 1.0.1)
+        $VERSION_NUMBER = $LATEST_TAG -replace '^Release-', ''
+        Write-Output "VERSION_NUMBER: $VERSION_NUMBER"
+
+        # Get the distance since the latest tag
+        $DISTANCE = git rev-list --count "$LATEST_TAG..HEAD"
+        Write-Output "DISTANCE: $DISTANCE"
+
+        # Append -SP<distance> if distance is greater than 0
+        if ($DISTANCE -gt 0) {
+            # Increment the third number
+            $versionParts = $VERSION_NUMBER -split '\.'
+            $versionParts[2] = [int]$versionParts[2] + 1
+            $VERSION_NUMBER = $versionParts -join '.'
+            Write-Output "VERSION CORRECTED: $VERSION_NUMBER"
+
+            # Add SP info
+            $DISTANCE_PADDED = $DISTANCE.ToString().PadLeft(3, '0')
+            Write-Output "DISTANCE_PADDED: $DISTANCE_PADDED"
+            $VERSION = "$VERSION_NUMBER-RC$DISTANCE_PADDED"
+        } else {
+            $VERSION = $VERSION_NUMBER
+        }
+
+        # Output the version
+        "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Output "Using version: $VERSION"    
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1
+
+    - name: Restore NuGets
+      run: nuget restore SoundWinAgent.sln
+
+    - name: Integrate vcpkg with MSBuild
+      run: vcpkg integrate install
+
+    - name: Build with MSBuild
+      run: |
+        msbuild /p:Configuration=Release /p:VcpkgEnabled=true /p:VcpkgManifestPath=vcpkg.json /p:VcpkgTriplet=x64-windows-static /target:Rebuild -restore
+        dotnet publish "Projects/SoundDefaultUI/SoundDefaultUI.csproj" -c Release -p:PublishProfile=FolderProfile -v:detailed
+        dotnet publish "Projects/HttpRequestProcessor/HttpRequestProcessor.csproj" -c Release -p:PublishProfile=WinX64 -v:detailed
+
+    - name: Upload entire artifacts directory
+      uses: actions/upload-artifact@v4
+      with:
+        name: Artifacts
+        path: artifacts\
+
+  publish:
+    if: github.ref != 'refs/pull/develop'
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Artifacts
+          path: build
+
+      - name: Create Release
+        run: |
+          VERS=${{ needs.build.outputs.version }}
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          gh release create "$VERS" --title "SoundWinAgent $VERS" --notes "Release of Sound Windows Agent $VERS"
+          gh release upload "$VERS" build/*.*

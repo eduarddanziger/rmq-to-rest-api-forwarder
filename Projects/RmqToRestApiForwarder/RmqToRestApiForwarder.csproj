@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>dotnet-HttpRequestProcessor-fbbfb87b-931a-42b0-8fa6-311970bac6f7</UserSecretsId>
+        <BaseDirectory>$(MSBuildThisFileDirectory)..\..\</BaseDirectory>
+        <ArtifactsDirectory>$(BaseDirectory)artifacts\</ArtifactsDirectory>
+        <ReleaseNotesFileName>SoundWinAgent-Release-Notes.md</ReleaseNotesFileName>
+    </PropertyGroup>
+    <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.Common.props" />
+    <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.CSharp.targets" />
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.8" />
+        <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
+        <PackageReference Include="System.Text.Json" Version="9.0.8" />
+    </ItemGroup>
+
+    <!--
+    <Target Name="ProcessReleaseNotes" Condition=" '$(_IsPublishing)' != 'true' " BeforeTargets="BeforeBuild">
+        <PropertyGroup>
+            <ReleaseNotesTargetPathName>$(ArtifactsDirectory)$(ReleaseNotesFileName)</ReleaseNotesTargetPathName>
+        </PropertyGroup>
+        <Copy SourceFiles="$(BaseDirectory)$(ReleaseNotesFileName)" DestinationFolder="$(ArtifactsDirectory)" />
+        <FileUpdate Files="$(ReleaseNotesTargetPathName)" Regex="\$version\$" ReplacementText="$(Version)" />
+        <Time Format="dd.MM.yyyy">
+            <Output TaskParameter="FormattedTime" PropertyName="BuildDate" />
+        </Time>
+        <FileUpdate Files="$(ReleaseNotesTargetPathName)" Regex="\$date\$" ReplacementText="$(BuildDate)" />
+    </Target>
+    -->
+
+    <Target Name="ZipOutputPath" AfterTargets="SignAfterPublish">
+        <Message Text="Zip: PublishFullDirectory: $(PublishFullDirectory)" importance="high" />
+        <PropertyGroup>
+            <PublishFullDirectory>$(ProjectDir)$(PublishDir)</PublishFullDirectory>
+            <ZipFileNameSuffix Condition=" '$(Configuration)' == 'Debug' ">-Debug</ZipFileNameSuffix>
+            <ZipFileName>$(ArtifactsDirectory)$(AssemblyName)$(ZipFileNameSuffix)-$(Version).zip</ZipFileName>
+        </PropertyGroup>
+        <Copy DestinationFolder="$(PublishFullDirectory)" SourceFiles="$(ArtifactsDirectory)$(ReleaseNotesFileName)" />
+        <ZipDirectory Overwrite="true" SourceDirectory="$(PublishFullDirectory)" DestinationFile="$(ZipFileName)" />
+    </Target>
+</Project>
