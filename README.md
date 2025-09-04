@@ -1,6 +1,8 @@
 # RambbitMQ To REST API Forwarder
 
-This is a helper service for a Sound Windows Agent ([SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/)
+A helper service for a Sound Windows Agent [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/)
+
+## Overview
 
 The Sound Windows Agent registers audio device information on a backend REST API by means of equeing HTTP Requests to RabbitMQ.
 The RmqToRestApiForwarder Windows Service dequeues the HTTP Requests from RabbitMQ and forwards them to the backend REST API. 
