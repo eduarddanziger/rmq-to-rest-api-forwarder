@@ -74,12 +74,9 @@ jobs:
     - name: Restore NuGets
       run: nuget restore RmqToRestApiForwarder.sln
 
-    - name: Integrate vcpkg with MSBuild
-      run: vcpkg integrate install
-
     - name: Build with MSBuild
       run: |
-        msbuild /p:Configuration=Release /p:VcpkgEnabled=true /p:VcpkgManifestPath=vcpkg.json /p:VcpkgTriplet=x64-windows-static /target:Rebuild -restore
+        msbuild /p:Configuration=Release /target:Rebuild -restore
         dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release -p:PublishProfile=WinX64 -v:detailed
 
     - name: Upload entire artifacts directory
