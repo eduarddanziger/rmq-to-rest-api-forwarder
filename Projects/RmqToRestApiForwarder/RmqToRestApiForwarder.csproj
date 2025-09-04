@@ -42,6 +42,13 @@
             <ZipFileName>$(ArtifactsDirectory)$(AssemblyName)$(ZipFileNameSuffix)-$(Version).zip</ZipFileName>
         </PropertyGroup>
         <Copy DestinationFolder="$(PublishFullDirectory)" SourceFiles="$(ArtifactsDirectory)$(ReleaseNotesFileName)" />
-        <ZipDirectory Overwrite="true" SourceDirectory="$(PublishFullDirectory)" DestinationFile="$(ZipFileName)" />
+        <ItemGroup>
+            <FilesToZip Include="$(PublishFullDirectory)**\*.*"
+                        Exclude="$(PublishFullDirectory)**\*.pdb" />
+        </ItemGroup>
+        <Delete Files="$(ZipFileName)" ContinueOnError="true" />
+        <Zip WorkingDirectory="$(PublishFullDirectory)"
+             Files="@(FilesToZip)"
+             ZipFileName="$(ZipFileName)" />
     </Target>
 </Project>
