@@ -72,7 +72,7 @@ jobs:
       uses: microsoft/setup-msbuild@v1
 
     - name: Restore NuGets
-      run: nuget restore SoundWinAgent.sln
+      run: nuget restore RmqToRestApiForwarder.sln
 
     - name: Integrate vcpkg with MSBuild
       run: vcpkg integrate install
@@ -80,8 +80,7 @@ jobs:
     - name: Build with MSBuild
       run: |
         msbuild /p:Configuration=Release /p:VcpkgEnabled=true /p:VcpkgManifestPath=vcpkg.json /p:VcpkgTriplet=x64-windows-static /target:Rebuild -restore
-        dotnet publish "Projects/SoundDefaultUI/SoundDefaultUI.csproj" -c Release -p:PublishProfile=FolderProfile -v:detailed
-        dotnet publish "Projects/HttpRequestProcessor/HttpRequestProcessor.csproj" -c Release -p:PublishProfile=WinX64 -v:detailed
+        dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release -p:PublishProfile=WinX64 -v:detailed
 
     - name: Upload entire artifacts directory
       uses: actions/upload-artifact@v4
@@ -108,5 +107,5 @@ jobs:
         run: |
           VERS=${{ needs.build.outputs.version }}
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-          gh release create "$VERS" --title "SoundWinAgent $VERS" --notes "Release of Sound Windows Agent $VERS"
+          gh release create "$VERS" --title "RmqToRestApiForwarder $VERS" --notes "Release of RambbitMQ To REST API Forwarder $VERS"
           gh release upload "$VERS" build/*.*

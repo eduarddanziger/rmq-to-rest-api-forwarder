@@ -7,7 +7,7 @@
         <UserSecretsId>dotnet-HttpRequestProcessor-fbbfb87b-931a-42b0-8fa6-311970bac6f7</UserSecretsId>
         <BaseDirectory>$(MSBuildThisFileDirectory)..\..\</BaseDirectory>
         <ArtifactsDirectory>$(BaseDirectory)artifacts\</ArtifactsDirectory>
-        <ReleaseNotesFileName>SoundWinAgent-Release-Notes.md</ReleaseNotesFileName>
+        <ReleaseNotesFileName>RmqToRestApiForwarder-Release-Notes.md</ReleaseNotesFileName>
     </PropertyGroup>
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.Common.props" />
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.CSharp.targets" />
@@ -16,9 +16,12 @@
         <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.8" />
         <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
         <PackageReference Include="System.Text.Json" Version="9.0.8" />
+        <PackageReference Include="MSBuildTasks" Version="1.5.0.235">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
 
-    <!--
     <Target Name="ProcessReleaseNotes" Condition=" '$(_IsPublishing)' != 'true' " BeforeTargets="BeforeBuild">
         <PropertyGroup>
             <ReleaseNotesTargetPathName>$(ArtifactsDirectory)$(ReleaseNotesFileName)</ReleaseNotesTargetPathName>
@@ -30,7 +33,6 @@
         </Time>
         <FileUpdate Files="$(ReleaseNotesTargetPathName)" Regex="\$date\$" ReplacementText="$(BuildDate)" />
     </Target>
-    -->
 
     <Target Name="ZipOutputPath" AfterTargets="SignAfterPublish">
         <Message Text="Zip: PublishFullDirectory: $(PublishFullDirectory)" importance="high" />

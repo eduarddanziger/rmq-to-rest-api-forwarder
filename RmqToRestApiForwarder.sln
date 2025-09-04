@@ -6,11 +6,10 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F91E0676-3871-489C-9444-F8979C0B6D46}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
-		202509011440SoundDefaultUI.jpg = 202509011440SoundDefaultUI.jpg
 		.github\workflows\build.yml = .github\workflows\build.yml
 		LICENSE = LICENSE
-		NuGet.Config = NuGet.Config
 		README.md = README.md
+		RmqToRestApiForwarder-Release-Notes.md = RmqToRestApiForwarder-Release-Notes.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RmqToRestApiForwarder", "Projects\RmqToRestApiForwarder\RmqToRestApiForwarder.csproj", "{D95C52E8-5631-4FDC-9DC6-A3C3C23A91DA}"
