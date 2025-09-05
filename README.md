@@ -32,12 +32,23 @@ choco install rabbitmq -y
 
 3. Download and unzip the latest rollout of RabbitMQ To REST API Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
 
-4. Register RmqToRestApiForwarder.exe as a Windows Service and start it:
+4. Use it as a Windows Service or, alternatively, run it from a command prompt.
 
-```powershell
-sc create RmqToRestApiForwarder binPath="<your folder>\RmqToRestApiForwarder.exe" start=auto
-sc start RmqToRestApiForwarder
-```
+    If you want a Windows Service, open an elevated command or power shell prompt (Run as Administrator)
+  ```powershell
+  ## Register as a Windows Service and start it:
+  sc create RmqToRestApiForwarder binPath="<your folder>\RmqToRestApiForwarder.exe" start=auto
+  sc start RmqToRestApiForwarder
+
+  ## Stop it and unregister:
+  sc stop RmqToRestApiForwarder
+  sc delete RmqToRestApiForwarder
+  ```
+5. You can redefined the ApiBaseUrl:Target (see appsettings.json, default is Azure) via command line.
+   The possible values are Azure, Local, Codespace, e.g.:
+  ```powershell
+  RmqToRestApiForwarder.exe --ApiBaseUrl:Target=Codespace
+  ```
 
 ## Developer Environment, How to Build and Run:
 
