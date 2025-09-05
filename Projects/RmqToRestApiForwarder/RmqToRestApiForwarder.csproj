@@ -8,12 +8,15 @@
         <BaseDirectory>$(MSBuildThisFileDirectory)..\..\</BaseDirectory>
         <ArtifactsDirectory>$(BaseDirectory)artifacts\</ArtifactsDirectory>
         <ReleaseNotesFileName>RmqToRestApiForwarder-Release-Notes.md</ReleaseNotesFileName>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.Common.props" />
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.CSharp.targets" />
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
         <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.8" />
+        <PackageReference Include="NLog.Extensions.Logging" Version="6.0.3" />
+        <PackageReference Include="NLog.Targets.GZipFile" Version="6.0.3" />
         <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
         <PackageReference Include="System.Text.Json" Version="9.0.8" />
         <PackageReference Include="MSBuildTasks" Version="1.5.0.235">
@@ -42,6 +45,10 @@
             <ZipFileName>$(ArtifactsDirectory)$(AssemblyName)$(ZipFileNameSuffix)-$(Version).zip</ZipFileName>
         </PropertyGroup>
         <Copy DestinationFolder="$(PublishFullDirectory)" SourceFiles="$(ArtifactsDirectory)$(ReleaseNotesFileName)" />
-        <ZipDirectory Overwrite="true" SourceDirectory="$(PublishFullDirectory)" DestinationFile="$(ZipFileName)" />
+        <ItemGroup>
+            <FilesToZip Include="$(PublishFullDirectory)**\*.*" Exclude="$(PublishFullDirectory)**\*.pdb" />
+        </ItemGroup>
+        <Delete Files="$(ZipFileName)" ContinueOnError="true" />
+        <Zip WorkingDirectory="$(PublishFullDirectory)" Files="@(FilesToZip)" ZipFileName="$(ZipFileName)" />
     </Target>
 </Project>
