@@ -1,4 +1,4 @@
-# RambbitMQ To REST API Forwarder
+# RabbitMQ To REST API Forwarder
 
 A helper service for a Sound Windows Agent [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/)
 

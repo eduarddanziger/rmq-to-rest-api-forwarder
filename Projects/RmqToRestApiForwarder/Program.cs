@@ -1,19 +1,35 @@
+using HttpRequestProcessor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NLog;
+using NLog.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
 using System.Text.Json;
-using HttpRequestProcessor;
+using RmqToRestApiForwarder;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 var builder = Host.CreateDefaultBuilder(args)
+    .ConfigureLogging((context, logging) =>
+    {
+        logging.ClearProviders();
+        logging.SetMinimumLevel(LogLevel.Trace);
+
+        LogManager.Setup()
+            .SetupExtensions(ext => ext.RegisterLayoutRenderer<NativeThreadIdLayoutRenderer>("native-thread-id"))
+            .LoadConfigurationFromSection(context.Configuration.GetSection("NLog"));
+
+        logging.AddNLog();
+    })
     .UseWindowsService(options =>
     {
-        options.ServiceName = "RabbitMQ Message Processor";
+        options.ServiceName = "RabbitMQ To REST API Forwarder";
     })
     .ConfigureServices((context, services) =>
     {
         var config = context.Configuration;
+
         services.Configure<RabbitMqSettings>(config.GetSection("RabbitMQ"));
         services.Configure<ApiBaseUrlSettings>(config.GetSection("ApiBaseUrl"));
 
