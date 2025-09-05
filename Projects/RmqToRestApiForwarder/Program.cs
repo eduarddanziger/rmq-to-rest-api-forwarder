@@ -41,7 +41,6 @@ var builder = Host.CreateDefaultBuilder(args)
                 Password = config["RabbitMQ:Password"] ?? string.Empty
             });
 
-        // Add hosted service
         services.AddHostedService<RabbitMqConsumerService>();
     });
 
@@ -61,8 +60,8 @@ public record RabbitMqSettings
 public record ApiBaseUrlSettings
 #pragma warning restore CA1050
 {
-    public string GitHubCodespaceUrl { get; init; } = string.Empty;
-    public string AzureUrl { get; init; } = string.Empty;
-    public string LocalVmUrl { get; init; } = string.Empty;
-
+    public string Target { get; init; } = "Azure";
+    public string Codespace { get; init; } = string.Empty;
+    public string Azure { get; init; } = string.Empty;
+    public string Local { get; init; } = string.Empty;
 }
