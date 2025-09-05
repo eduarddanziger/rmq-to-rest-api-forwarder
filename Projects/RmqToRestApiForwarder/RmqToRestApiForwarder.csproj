@@ -9,11 +9,9 @@
         <ArtifactsDirectory>$(BaseDirectory)artifacts\</ArtifactsDirectory>
         <ReleaseNotesFileName>RmqToRestApiForwarder-Release-Notes.md</ReleaseNotesFileName>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <MSBuildCommunityTasksTargets>$(NuGetPackageRoot)msbuildtasks\1.5.0.235\tools\MSBuild.Community.Tasks.targets</MSBuildCommunityTasksTargets>
     </PropertyGroup>
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.Common.props" />
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.CSharp.targets" />
-    <Import Project="$(MSBuildCommunityTasksTargets)" Condition="Exists('$(MSBuildCommunityTasksTargets)')" />
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
         <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.8" />
@@ -45,12 +43,20 @@
             <PublishFullDirectory>$(ProjectDir)$(PublishDir)</PublishFullDirectory>
             <ZipFileNameSuffix Condition=" '$(Configuration)' == 'Debug' ">-Debug</ZipFileNameSuffix>
             <ZipFileName>$(ArtifactsDirectory)$(AssemblyName)$(ZipFileNameSuffix)-$(Version).zip</ZipFileName>
+            <ZipStageDir>$(IntermediateOutputPath)zipstage\</ZipStageDir>
         </PropertyGroup>
         <Copy DestinationFolder="$(PublishFullDirectory)" SourceFiles="$(ArtifactsDirectory)$(ReleaseNotesFileName)" />
         <ItemGroup>
             <FilesToZip Include="$(PublishFullDirectory)**\*.*" Exclude="$(PublishFullDirectory)**\*.pdb" />
         </ItemGroup>
+        <ItemGroup>
+            <FilesToStage Include="$(PublishFullDirectory)**\*.*" Exclude="$(PublishFullDirectory)**\*.pdb" />
+        </ItemGroup>
+        <RemoveDir Directories="$(ZipStageDir)" />
+        <MakeDir Directories="$(ZipStageDir)" />
+        <Copy SourceFiles="@(FilesToStage)"
+              DestinationFiles="@(FilesToStage->'$(ZipStageDir)%(RecursiveDir)%(Filename)%(Extension)')" />
         <Delete Files="$(ZipFileName)" ContinueOnError="true" />
-        <Zip WorkingDirectory="$(PublishFullDirectory)" Files="@(FilesToZip)" ZipFileName="$(ZipFileName)" />
+        <ZipDirectory SourceDirectory="$(ZipStageDir)" DestinationFile="$(ZipFileName)" Overwrite="true" />
     </Target>
 </Project>
