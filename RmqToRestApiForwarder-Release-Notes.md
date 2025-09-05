@@ -12,4 +12,4 @@ Released on $date$
 
 ## New
 - Separated from SoundWinAgent repository
-
+- Logging to file, configured in appsettings.json
