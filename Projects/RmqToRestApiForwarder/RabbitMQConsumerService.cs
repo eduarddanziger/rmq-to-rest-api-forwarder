@@ -32,8 +32,8 @@ public class RabbitMqConsumerService : BackgroundService
 
     // Durable retry settings
     private const string AttemptHeader = "x-attempt";
-    private const int MaxAttempts = 5;            // give a message N total attempts
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(30); // constant delay (can be enhanced to exponential)
+    private const int MaxAttempts = 5;
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(10);
 
     public RabbitMqConsumerService(IConnectionFactory connectionFactory,
         IOptions<RabbitMqSettings> rabbitSettings,
@@ -88,7 +88,7 @@ public class RabbitMqConsumerService : BackgroundService
                 ["x-dead-letter-exchange"] = string.Empty,
                 ["x-dead-letter-routing-key"] = _queueName,
                 ["x-message-ttl"] = (int)RetryDelay.TotalMilliseconds,
-                ["x-expires"] = (int)RetryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds // auto-delete after inactivity buffer
+                ["x-expires"] = (int)RetryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds
             };
             await _channel.QueueDeclareAsync(
                 queue: _retryQueueName,
