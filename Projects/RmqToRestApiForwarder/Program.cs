@@ -1,4 +1,3 @@
-using HttpRequestProcessor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NLog;
