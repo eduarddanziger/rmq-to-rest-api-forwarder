@@ -29,6 +29,8 @@ public class RabbitMqConsumerService : BackgroundService
         ", ",
         Array.ConvertAll(ValidTargets, v => $"\"{v}\""));
 
+    private readonly record struct ProcessingResult(bool Success, string? ErrorReason);
+
     public RabbitMqConsumerService(IConnectionFactory connectionFactory,
         IOptions<RabbitMqSettings> rabbitSettings,
         IOptions<ApiBaseUrlSettings> apiSettings,
@@ -76,39 +78,37 @@ public class RabbitMqConsumerService : BackgroundService
             {
                 var body = ea.Body.ToArray();
                 var message = JsonNode.Parse(body)!.AsObject();
+
+
                 var httpRequest = message["httpRequest"]?.GetValue<string>();
                 var urlSuffix = message["urlSuffix"]?.GetValue<string>();
                 message.Remove("httpRequest");
                 message.Remove("urlSuffix");
 
-                using var httpClient = new HttpClient();
-                var jsonContent = new StringContent(
-                    message.ToJsonString(),
-                    Encoding.UTF8,
-                    "application/json"
-                );
+                var prettyPayload = message.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                _logger.LogInformation("Received {POSTOrPUT} HTTP request with suffix {Suffix} and payload:\n{Payload}", httpRequest, urlSuffix, prettyPayload);
 
+                var result = await SendToApiAsync(httpRequest, urlSuffix, message, cancellationToken);
 
-                var response = httpRequest?.ToUpper() == "PUT"
-                    ? await httpClient.PutAsync(_apiEndpoint + urlSuffix, jsonContent, cancellationToken)
-                    : await httpClient.PostAsync(_apiEndpoint + urlSuffix, jsonContent, cancellationToken);
-
-                if (response.IsSuccessStatusCode)
+                if (result.Success)
                 {
                     await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
                     _logger.LogInformation("Processed message with {Method}", httpRequest);
                 }
                 else
                 {
+                    // Requeue for HTTP failure (may refine later).
                     await _channel.BasicNackAsync(ea.DeliveryTag, false, true, cancellationToken);
-                    _logger.LogWarning("API rejected message. Status: {Status}", response.StatusCode);
+                    _logger.LogWarning("Message processing failed (will requeue). Reason: {Reason}", result.ErrorReason);
                 }
             }
             catch (Exception ex)
-            {   
-                _logger.LogError(ex, "Message processing failed");
+            {
+                _logger.LogError(ex, "Message processing failed. Message will be not re-enqueued (dropped).");
                 if (_channel != null)
+                {
                     await _channel.BasicNackAsync(ea.DeliveryTag, false, false, cancellationToken);
+                }
             }
         };
 
@@ -119,6 +119,36 @@ public class RabbitMqConsumerService : BackgroundService
             cancellationToken: cancellationToken);
 
         await Task.Delay(Timeout.Infinite, cancellationToken);
+    }
+
+    private async Task<ProcessingResult> SendToApiAsync(string? httpMethod, string? urlSuffix, JsonObject payload, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(urlSuffix))
+            return new ProcessingResult(false, "Missing urlSuffix");
+
+        if (string.IsNullOrWhiteSpace(httpMethod))
+            return new ProcessingResult(false, "Missing httpRequest method");
+
+        try
+        {
+            using var httpClient = new HttpClient();
+            using var jsonContent = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+
+            var upper = httpMethod.ToUpperInvariant();
+            var response = upper == "PUT"
+                ? await httpClient.PutAsync(_apiEndpoint + urlSuffix, jsonContent, ct)
+                : await httpClient.PostAsync(_apiEndpoint + urlSuffix, jsonContent, ct);
+
+            if (response.IsSuccessStatusCode)
+                return new ProcessingResult(true, null);
+
+            var reason = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+            return new ProcessingResult(false, reason);
+        }
+        catch (Exception ex)
+        {
+            return new ProcessingResult(false, ex.Message);
+        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
