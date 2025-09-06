@@ -127,8 +127,8 @@ public class RabbitMqConsumerService : BackgroundService
                     message.Remove("urlSuffix");
 
                     _logger.LogInformation(
-                        "Received \"{Method}\" HTTP request [Attempt {Attempt}/{MaxAttempts}] with payload:\n{Payload}",
-                        httpRequest, attempt, MaxAttempts,
+                        "Received a message with HTTP request (Attempt {Attempt}/{MaxAttempts}): \"{Method}\", suffix \"{Suffix}\", payload:\n{Payload}",
+                        attempt, MaxAttempts, httpRequest, urlSuffix,
                         message.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
                     var result = await SendToApiAsync(httpRequest, urlSuffix, message, cancellationToken);
@@ -247,11 +247,11 @@ public class RabbitMqConsumerService : BackgroundService
 
     private async Task<ProcessingResult> SendToApiAsync(string? httpMethod, string? urlSuffix, JsonObject payload, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(urlSuffix))
-            return new ProcessingResult(false, "Missing urlSuffix");
+        if (urlSuffix == null)
+            return new ProcessingResult(false, "urlSuffix is null");
 
         if (string.IsNullOrWhiteSpace(httpMethod))
-            return new ProcessingResult(false, "Missing httpRequest method");
+            return new ProcessingResult(false, "httpMethod is null or empty");
 
         try
         {
