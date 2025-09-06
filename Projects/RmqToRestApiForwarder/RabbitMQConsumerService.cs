@@ -126,8 +126,10 @@ public class RabbitMqConsumerService : BackgroundService
                     message.Remove("httpRequest");
                     message.Remove("urlSuffix");
 
-                    var prettyPayload = message.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-                    _logger.LogInformation("[Attempt {Attempt}/{MaxAttempts}] Received {Method} {Suffix} Payload:\n{Payload}", attempt, MaxAttempts, httpRequest, urlSuffix, prettyPayload);
+                    _logger.LogInformation(
+                        "Received \"{Method}\" HTTP request [Attempt {Attempt}/{MaxAttempts}] with payload:\n{Payload}",
+                        httpRequest, attempt, MaxAttempts,
+                        message.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
                     var result = await SendToApiAsync(httpRequest, urlSuffix, message, cancellationToken);
 
