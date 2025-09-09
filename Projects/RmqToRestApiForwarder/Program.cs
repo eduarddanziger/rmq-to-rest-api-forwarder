@@ -1,11 +1,6 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using NLog;
 using NLog.Extensions.Logging;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
-using System.Text;
-using System.Text.Json;
 using RmqToRestApiForwarder;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
@@ -21,10 +16,7 @@ var builder = Host.CreateDefaultBuilder(args)
 
         logging.AddNLog();
     })
-    .UseWindowsService(options =>
-    {
-        options.ServiceName = "RabbitMQ To REST API Forwarder";
-    })
+    .UseWindowsService(options => { options.ServiceName = "RabbitMQ To REST API Forwarder"; })
     .ConfigureServices((context, services) =>
     {
         var config = context.Configuration;
@@ -32,8 +24,8 @@ var builder = Host.CreateDefaultBuilder(args)
         services.Configure<RabbitMqSettings>(config.GetSection("RabbitMQ"));
         services.Configure<ApiBaseUrlSettings>(config.GetSection("ApiBaseUrl"));
 
-        services.AddSingleton<IConnectionFactory>(sp =>
-            new ConnectionFactory()
+        services.AddSingleton<IConnectionFactory>(_ =>
+            new ConnectionFactory
             {
                 HostName = config["RabbitMQ:HostName"] ?? string.Empty,
                 UserName = config["RabbitMQ:UserName"] ?? string.Empty,
@@ -44,23 +36,3 @@ var builder = Host.CreateDefaultBuilder(args)
     });
 
 await builder.RunConsoleAsync();
-
-
-
-// Configuration classes
-#pragma warning disable CA1050
-public record RabbitMqSettings
-#pragma warning restore CA1050
-{
-    public string HostName { get; init; } = string.Empty;
-    public string QueueName { get; init; } = string.Empty;
-}
-#pragma warning disable CA1050
-public record ApiBaseUrlSettings
-#pragma warning restore CA1050
-{
-    public string Target { get; init; } = "Azure";
-    public string Codespace { get; init; } = string.Empty;
-    public string Azure { get; init; } = string.Empty;
-    public string Local { get; init; } = string.Empty;
-}

@@ -5,7 +5,6 @@ using NLog.LayoutRenderers;
 
 namespace RmqToRestApiForwarder;
 
-
 // Custom NLog layout renderer to get native thread ID
 [LayoutRenderer("native-thread-id")]
 internal partial class NativeThreadIdLayoutRenderer : LayoutRenderer

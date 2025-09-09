@@ -25,6 +25,7 @@
         </PackageReference>
     </ItemGroup>
 
+    <!-- ReSharper disable UnknownTask -->
     <Target Name="ProcessReleaseNotes" Condition=" '$(_IsPublishing)' != 'true' " BeforeTargets="BeforeBuild">
         <PropertyGroup>
             <ReleaseNotesTargetPathName>$(ArtifactsDirectory)$(ReleaseNotesFileName)</ReleaseNotesTargetPathName>
@@ -59,4 +60,5 @@
         <Delete Files="$(ZipFileName)" ContinueOnError="true" />
         <ZipDirectory SourceDirectory="$(ZipStageDir)" DestinationFile="$(ZipFileName)" Overwrite="true" />
     </Target>
+    <!-- ReSharper restore UnknownTask -->
 </Project>
