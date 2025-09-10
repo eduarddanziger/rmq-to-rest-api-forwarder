@@ -11,7 +11,9 @@ public class RabbitMqConsumerService : BackgroundService
 {
     // Durable retry settings
     private const string AttemptHeader = "x-attempt";
-    private const int MaxAttempts = 5;
+
+    private readonly int _maxRetryAttempts;
+    private readonly TimeSpan _retryDelay;
 
     private static readonly string[] ValidTargets =
     [
@@ -22,7 +24,6 @@ public class RabbitMqConsumerService : BackgroundService
         ", ",
         Array.ConvertAll(ValidTargets, v => $"\"{v}\""));
 
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(10);
     private readonly string _apiEndpoint;
     private readonly IConnectionFactory _connectionFactory;
     private readonly string _failedQueueName;
@@ -33,16 +34,25 @@ public class RabbitMqConsumerService : BackgroundService
 
     private IConnection? _connection;
 
-    public RabbitMqConsumerService(IConnectionFactory connectionFactory,
-        IOptions<RabbitMqSettings> rabbitSettings,
+    public RabbitMqConsumerService(IOptions<RabbitMqServerSettings> rmqServerSettings,
+        IOptions<RabbitMqMessageDeliverySettings> rmqMessageDeliverySettings,
         IOptions<ApiBaseUrlSettings> apiSettings,
         ILogger<RabbitMqConsumerService> logger)
     {
-        _connectionFactory = connectionFactory;
+        _connectionFactory = new ConnectionFactory
+        {
+            HostName = rmqServerSettings.Value.HostName,
+            UserName = rmqServerSettings.Value.UserName,
+            Password = rmqServerSettings.Value.Password
+        };
         _logger = logger;
-        _queueName = rabbitSettings.Value.QueueName;
+        _queueName = rmqServerSettings.Value.QueueName;
         _retryQueueName = _queueName + ".retry";
         _failedQueueName = _queueName + ".failed";
+
+        _maxRetryAttempts = rmqMessageDeliverySettings.Value.MaxRetryAttempts;
+        _retryDelay = TimeSpan.FromSeconds(rmqMessageDeliverySettings.Value.RetryDelayInSeconds);
+
         var apiTarget = apiSettings.Value.Target;
 
         if (Array.IndexOf(ValidTargets, apiTarget) < 0)
@@ -62,8 +72,8 @@ public class RabbitMqConsumerService : BackgroundService
             _ => apiSettings.Value.Azure
         };
         _logger.LogInformation(
-            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\"",
-            _queueName, _retryQueueName, _failedQueueName, apiTarget);
+            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay}",
+            _queueName, _retryQueueName, _failedQueueName, apiTarget, _maxRetryAttempts, (int)_retryDelay.TotalSeconds);
     }
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -88,8 +98,8 @@ public class RabbitMqConsumerService : BackgroundService
             {
                 ["x-dead-letter-exchange"] = string.Empty,
                 ["x-dead-letter-routing-key"] = _queueName,
-                ["x-message-ttl"] = (int)RetryDelay.TotalMilliseconds,
-                ["x-expires"] = (int)RetryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds
+                ["x-message-ttl"] = (int)_retryDelay.TotalMilliseconds,
+                ["x-expires"] = (int)_retryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds
             };
             await _channel.QueueDeclareAsync(
                 _retryQueueName,
@@ -114,12 +124,12 @@ public class RabbitMqConsumerService : BackgroundService
                 cancellationToken: cancellationToken);
 
             var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (_, ea) =>
+            consumer.ReceivedAsync += async (_, deliveryEvent) =>
             {
                 try
                 {
-                    var body = ea.Body.ToArray();
-                    var attempt = GetAttempt(ea.BasicProperties.Headers);
+                    var body = deliveryEvent.Body.ToArray();
+                    var attempt = GetAttempt(deliveryEvent.BasicProperties.Headers);
 
                     var message = JsonNode.Parse(body)!.AsObject();
                     var httpRequest = message["httpRequest"]?.GetValue<string>();
@@ -129,30 +139,30 @@ public class RabbitMqConsumerService : BackgroundService
 
                     _logger.LogInformation(
                         "Received a message with HTTP request (Attempt {Attempt}/{MaxAttempts}): \"{Method}\", suffix \"{Suffix}\", payload:\n{Payload}",
-                        attempt, MaxAttempts, httpRequest, urlSuffix,
+                        attempt, _maxRetryAttempts, httpRequest, urlSuffix,
                         message.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
                     var result = await SendToApiAsync(httpRequest, urlSuffix, message, cancellationToken);
 
                     if (result.Success)
                     {
-                        await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
+                        await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken);
                         _logger.LogInformation("Message processed successfully on attempt {Attempt}", attempt);
                     }
                     else
                     {
-                        if (attempt < MaxAttempts)
+                        if (attempt < _maxRetryAttempts)
                         {
                             await PublishWithAttemptAsync(_retryQueueName, body, attempt + 1, cancellationToken);
-                            await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken); // remove original
+                            await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken); // remove original
                             _logger.LogWarning(
                                 "Attempt {Attempt} failed. Scheduled retry attempt {NextAttempt} after {Delay}s. Reason: {Reason}",
-                                attempt, attempt + 1, (int)RetryDelay.TotalSeconds, result.ErrorReason);
+                                attempt, attempt + 1, (int)_retryDelay.TotalSeconds, result.ErrorReason);
                         }
                         else
                         {
                             await PublishWithAttemptAsync(_failedQueueName, body, attempt, cancellationToken);
-                            await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken); // remove original
+                            await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken); // remove original
                             _logger.LogError("Attempt {Attempt} (max) failed. Routed to failed queue. Reason: {Reason}",
                                 attempt, result.ErrorReason);
                         }
@@ -160,22 +170,23 @@ public class RabbitMqConsumerService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unhandled exception during processing. Moving message to failed queue.");
+                    _logger.LogError(ex, "Unexpected exception during message processing. Moving message to failed queue.");
                     try
                     {
                         if (_channel != null)
                         {
-                            var body = ea.Body.ToArray();
-                            await PublishWithAttemptAsync(_failedQueueName, body,
-                                GetAttempt(ea.BasicProperties.Headers), cancellationToken);
-                            await _channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken);
+                            var body = deliveryEvent.Body.ToArray();
+                            var attempt = GetAttempt(deliveryEvent.BasicProperties.Headers);
+
+                            await PublishWithAttemptAsync(_failedQueueName, body, attempt, cancellationToken);
+                            await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken);
                         }
                     }
                     catch (Exception republishEx)
                     {
                         _logger.LogError(republishEx, "Failed to move message to failed queue.");
                         if (_channel != null)
-                            await _channel.BasicNackAsync(ea.DeliveryTag, false, false, cancellationToken);
+                            await _channel.BasicNackAsync(deliveryEvent.DeliveryTag, false, false, cancellationToken);
                     }
                 }
             };
@@ -277,7 +288,8 @@ public class RabbitMqConsumerService : BackgroundService
         }
         catch (Exception ex)
         {
-            return new ProcessingResult(false, ex.Message);
+            var reason = $"Exception occurred: {ex.Message}";
+            return new ProcessingResult(false, reason);
         }
     }
 

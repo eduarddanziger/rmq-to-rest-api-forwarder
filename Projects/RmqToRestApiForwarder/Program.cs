@@ -21,16 +21,9 @@ var builder = Host.CreateDefaultBuilder(args)
     {
         var config = context.Configuration;
 
-        services.Configure<RabbitMqSettings>(config.GetSection("RabbitMQ"));
+        services.Configure<RabbitMqServerSettings>(config.GetSection("RabbitMQ:Service"));
+        services.Configure<RabbitMqMessageDeliverySettings>(config.GetSection("RabbitMQ:MessageDelivery"));
         services.Configure<ApiBaseUrlSettings>(config.GetSection("ApiBaseUrl"));
-
-        services.AddSingleton<IConnectionFactory>(_ =>
-            new ConnectionFactory
-            {
-                HostName = config["RabbitMQ:HostName"] ?? string.Empty,
-                UserName = config["RabbitMQ:UserName"] ?? string.Empty,
-                Password = config["RabbitMQ:Password"] ?? string.Empty
-            });
 
         services.AddHostedService<RabbitMqConsumerService>();
     });

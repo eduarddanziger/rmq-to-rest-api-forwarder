@@ -1,9 +1,17 @@
 namespace RmqToRestApiForwarder;
 
-public record RabbitMqSettings
+public record RabbitMqServerSettings
 {
     public string HostName { get; init; } = string.Empty;
     public string QueueName { get; init; } = string.Empty;
+    public string UserName { get; init; } = string.Empty;
+    public string Password { get; init; } = string.Empty;
+}
+
+public record RabbitMqMessageDeliverySettings
+{
+    public int MaxRetryAttempts { get; init; } = 5;
+    public int RetryDelayInSeconds { get; init; } = 10;
 }
 
 public record ApiBaseUrlSettings
