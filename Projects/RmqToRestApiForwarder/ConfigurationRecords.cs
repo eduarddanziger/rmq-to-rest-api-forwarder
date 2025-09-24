@@ -15,10 +15,16 @@ public record RabbitMqMessageDeliverySettings
 }
 
 public record ApiBaseUrlSettings
-#pragma warning restore CA1050
 {
     public string Target { get; init; } = "Azure";
     public string Codespace { get; init; } = string.Empty;
     public string Azure { get; init; } = string.Empty;
     public string Local { get; init; } = string.Empty;
+}
+
+public record GitHubCodespaceSettings
+{
+    public string StartUrl { get; init; } = string.Empty;
+    public string CodespaceName { get; init; } = string.Empty;
+    public string Token { get; init; } = string.Empty;
 }

@@ -15,28 +15,31 @@ public class RabbitMqConsumerService : BackgroundService
     private readonly int _maxRetryAttempts;
     private readonly TimeSpan _retryDelay;
 
-    private static readonly string[] ValidTargets =
+    private static readonly string[] _validTargets =
     [
         nameof(ApiBaseUrlSettings.Azure), nameof(ApiBaseUrlSettings.Local), nameof(ApiBaseUrlSettings.Codespace)
     ];
 
-    private static readonly string ValidTargetsAsString = string.Join(
+    private static readonly string _validTargetsAsString = string.Join(
         ", ",
-        Array.ConvertAll(ValidTargets, v => $"\"{v}\""));
+        Array.ConvertAll(_validTargets, v => $"\"{v}\""));
 
     private readonly string _apiEndpoint;
     private readonly IConnectionFactory _connectionFactory;
     private readonly string _failedQueueName;
+    private readonly GitHubCodespaceAwaker _codespaceAwaker;
     private readonly ILogger<RabbitMqConsumerService> _logger;
     private readonly string _queueName;
     private readonly string _retryQueueName;
     private IChannel? _channel;
 
     private IConnection? _connection;
+    private readonly string _apiTarget;
 
     public RabbitMqConsumerService(IOptions<RabbitMqServerSettings> rmqServerSettings,
         IOptions<RabbitMqMessageDeliverySettings> rmqMessageDeliverySettings,
         IOptions<ApiBaseUrlSettings> apiSettings,
+        GitHubCodespaceAwaker codespaceAwaker,
         ILogger<RabbitMqConsumerService> logger)
     {
         _connectionFactory = new ConnectionFactory
@@ -45,6 +48,7 @@ public class RabbitMqConsumerService : BackgroundService
             UserName = rmqServerSettings.Value.UserName,
             Password = rmqServerSettings.Value.Password
         };
+        _codespaceAwaker = codespaceAwaker;
         _logger = logger;
         _queueName = rmqServerSettings.Value.QueueName;
         _retryQueueName = _queueName + ".retry";
@@ -55,16 +59,17 @@ public class RabbitMqConsumerService : BackgroundService
 
         var apiTarget = apiSettings.Value.Target;
 
-        if (Array.IndexOf(ValidTargets, apiTarget) < 0)
+        _apiTarget = apiTarget;
+        if (Array.IndexOf(_validTargets, _apiTarget) < 0)
         {
             _logger.LogWarning(
                 "Service initializing: Unknown Target REST API \"{ApiTarget}\". The possible values are {PossibleTargets}. Setting it to default value \"{Default}\"",
-                apiTarget, ValidTargetsAsString, nameof(ApiBaseUrlSettings.Azure));
+                _apiTarget, _validTargetsAsString, nameof(ApiBaseUrlSettings.Azure));
 
-            apiTarget = nameof(ApiBaseUrlSettings.Azure);
+            _apiTarget = nameof(ApiBaseUrlSettings.Azure);
         }
 
-        _apiEndpoint = apiTarget switch
+        _apiEndpoint = _apiTarget switch
         {
             nameof(ApiBaseUrlSettings.Azure) => apiSettings.Value.Azure,
             nameof(ApiBaseUrlSettings.Codespace) => apiSettings.Value.Codespace,
@@ -73,7 +78,7 @@ public class RabbitMqConsumerService : BackgroundService
         };
         _logger.LogInformation(
             "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay}",
-            _queueName, _retryQueueName, _failedQueueName, apiTarget, _maxRetryAttempts, (int)_retryDelay.TotalSeconds);
+            _queueName, _retryQueueName, _failedQueueName, _apiTarget, _maxRetryAttempts, (int)_retryDelay.TotalSeconds);
     }
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -262,7 +267,7 @@ public class RabbitMqConsumerService : BackgroundService
     }
 
     private async Task<ProcessingResult> SendToApiAsync(string? httpMethod, string? urlSuffix, JsonObject payload,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         if (urlSuffix == null)
             return new ProcessingResult(false, "urlSuffix is null");
@@ -275,22 +280,28 @@ public class RabbitMqConsumerService : BackgroundService
             using var httpClient = new HttpClient();
             using var jsonContent = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
 
-            var upper = httpMethod.ToUpperInvariant();
-            var response = upper == "PUT"
-                ? await httpClient.PutAsync(_apiEndpoint + urlSuffix, jsonContent, ct)
-                : await httpClient.PostAsync(_apiEndpoint + urlSuffix, jsonContent, ct);
+            var response = httpMethod.ToUpperInvariant() == "PUT"
+                ? await httpClient.PutAsync(_apiEndpoint + urlSuffix, jsonContent, cancellationToken)
+                : await httpClient.PostAsync(_apiEndpoint + urlSuffix, jsonContent, cancellationToken);
 
-            if (response.IsSuccessStatusCode)
-                return new ProcessingResult(true, null);
-
-            var reason = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
-            return new ProcessingResult(false, reason);
+            if (!response.IsSuccessStatusCode)
+            {
+                var reason = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+                throw new Exception(reason);
+            }
         }
         catch (Exception ex)
         {
-            var reason = $"Exception occurred: {ex.Message}";
+            _logger.LogWarning("Caught {ExceptionType} exception: {Message}.",
+                ex.GetType().Name, ex.Message);
+            if (_apiTarget == nameof(ApiBaseUrlSettings.Codespace))
+            {
+                await _codespaceAwaker.Awake(cancellationToken);
+            }
+            var reason = $"Exception: {ex.Message}";
             return new ProcessingResult(false, reason);
         }
+        return new ProcessingResult(true, null);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

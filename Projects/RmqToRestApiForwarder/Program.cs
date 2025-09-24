@@ -24,7 +24,11 @@ var builder = Host.CreateDefaultBuilder(args)
         services.Configure<RabbitMqServerSettings>(config.GetSection("RabbitMQ:Service"));
         services.Configure<RabbitMqMessageDeliverySettings>(config.GetSection("RabbitMQ:MessageDelivery"));
         services.Configure<ApiBaseUrlSettings>(config.GetSection("ApiBaseUrl"));
+        services.Configure<GitHubCodespaceSettings>(config.GetSection("GitHubCodespace"));
 
+        services.AddSingleton<CryptService>();
+
+        services.AddSingleton<GitHubCodespaceAwaker>();
         services.AddHostedService<RabbitMqConsumerService>();
     });
 
