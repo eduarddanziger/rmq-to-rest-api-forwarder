@@ -15,25 +15,31 @@ public class GitHubCodespaceAwaker(IOptions<GitHubCodespaceSettings> codespaceSe
         InProgress
     }
 
-    private const int TimeoutSecs = 30; // Duration to keep InProgress state before resetting to Idle
+    private readonly int _timeoutSeconds = codespaceSettings.Value.TimeoutSeconds;
 
     private RequestState _state = RequestState.Idle;
     private readonly object _stateLock = new();
     private Timer? _resetTimer;
 
+    // Thread-safe state property
+    private RequestState State
+    {
+        get { lock (_stateLock) return _state; }
+        set { lock (_stateLock) _state = value; }
+    }
+
+    // Atomic compare-and-set helper
+
     public async Task Awake(CancellationToken cancellationToken)
     {
-        // Only continue if currently Idle
-        lock (_stateLock)
+        if (State != RequestState.Idle)
         {
-            if (_state != RequestState.Idle)
-            {
-                logger.LogDebug("Awake() call ignored because current state is {State}", _state);
-                return;
-            }
-            _state = RequestState.Requested;
-            logger.LogInformation("Codespace awake sequence started. State -> Requested");
+            logger.LogDebug("Awake() call ignored because current state is {State}", State);
+            return;
         }
+        State = RequestState.Requested;
+
+        logger.LogInformation("Codespace awake sequence started. State -> Requested");
 
         const string shortestPassword = "my.shortest.password";
 
@@ -67,20 +73,21 @@ public class GitHubCodespaceAwaker(IOptions<GitHubCodespaceSettings> codespaceSe
         finally
         {
             // Transition to InProgress and schedule reset
+            State = RequestState.InProgress;
+            logger.LogInformation("Codespace awaker state -> InProgress. Will reset to Idle in {Timeout}s", _timeoutSeconds);
+
+            Timer? oldTimer;
             lock (_stateLock)
             {
-                _state = RequestState.InProgress;
-                logger.LogInformation("Codespace awaker state -> InProgress. Will reset to Idle in {Timeout}s", TimeoutSecs);
-                _resetTimer?.Dispose();
+                oldTimer = _resetTimer;
                 _resetTimer = new Timer(_ =>
                 {
-                    lock (_stateLock)
-                    {
-                        _state = RequestState.Idle;
-                        logger.LogInformation("Codespace awaker state reset to Idle after timeout of {Timeout}s", TimeoutSecs);
-                    }
-                }, null, TimeSpan.FromSeconds(TimeoutSecs), Timeout.InfiniteTimeSpan);
+                    State = RequestState.Idle;
+                    logger.LogInformation("Codespace awaker state reset to Idle after timeout of {Timeout}s", _timeoutSeconds);
+                }, null, TimeSpan.FromSeconds(_timeoutSeconds), Timeout.InfiniteTimeSpan);
             }
+            // ReSharper disable once MethodHasAsyncOverload
+            oldTimer?.Dispose();
         }
     }
 }

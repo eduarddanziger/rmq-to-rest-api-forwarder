@@ -27,4 +27,5 @@ public record GitHubCodespaceSettings
     public string StartUrl { get; init; } = string.Empty;
     public string CodespaceName { get; init; } = string.Empty;
     public string Token { get; init; } = string.Empty;
+    public int TimeoutSeconds { get; init; } = 30;
 }
