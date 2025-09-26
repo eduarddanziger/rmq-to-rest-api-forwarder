@@ -16,6 +16,7 @@ public partial class RabbitMqConsumerService : BackgroundService
 
     private readonly int _maxRetryAttempts;
     private readonly TimeSpan _retryDelay;
+    private readonly TimeSpan _volumeDebounceWindow;
 
     private static readonly string[] _validTargets =
     [
@@ -62,6 +63,8 @@ public partial class RabbitMqConsumerService : BackgroundService
 
         _maxRetryAttempts = rmqMessageDeliverySettings.Value.MaxRetryAttempts;
         _retryDelay = TimeSpan.FromSeconds(rmqMessageDeliverySettings.Value.RetryDelayInSeconds);
+        _volumeDebounceWindow = TimeSpan.FromMilliseconds(
+            Math.Max(0, rmqMessageDeliverySettings.Value.VolumeChangeEventDebouncingWindowInMilliseconds));
 
         var apiTarget = apiSettings.Value.Target;
 
@@ -83,9 +86,9 @@ public partial class RabbitMqConsumerService : BackgroundService
             _ => apiSettings.Value.Azure
         };
         _logger.LogInformation(
-            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay}",
+            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay} VolumeDebounceWindowMs {Debounce}",
             _queueName, _retryQueueName, _failedQueueName, _apiTarget, _maxRetryAttempts,
-            (int)_retryDelay.TotalSeconds);
+            (int)_retryDelay.TotalSeconds, (int)_volumeDebounceWindow.TotalMilliseconds);
     }
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -135,10 +138,10 @@ public partial class RabbitMqConsumerService : BackgroundService
                 failedArgs!,
                 cancellationToken: cancellationToken);
 
-            // Initialize debouncers
+            // Initialize debouncers with configured window
             _renderDebouncer = new DebounceWorker(
                 name: "VolumeRenderChanged",
-                window: TimeSpan.FromMilliseconds(400),
+                window: _volumeDebounceWindow,
                 processMessageAsync: async (msg, ct) =>
                 {
                     _logger.LogInformation("Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be PROCESSED", msg.UpdateDate);
@@ -154,7 +157,7 @@ public partial class RabbitMqConsumerService : BackgroundService
 
             _captureDebouncer = new DebounceWorker(
                 name: "VolumeCaptureChanged",
-                window: TimeSpan.FromMilliseconds(400),
+                window: _volumeDebounceWindow,
                 processMessageAsync: async (msg, ct) =>
                 {
                     _logger.LogInformation("Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be PROCESSED.", msg.UpdateDate);

@@ -15,7 +15,8 @@ Released on $date$
 
 ## New
 - Event delivery attempts via additional RabbitMQ queue
-- GitHub Codespaces awaken if not running
+- GitHub Codespace, if configured, will be awaken, if not running
+- VolumeChangeEvent's debouncing implemented. Default interval is 400 milliseconds, configurable in appsettings.json
 
 
 3.3.5
