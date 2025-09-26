@@ -60,7 +60,7 @@ public partial class RabbitMqConsumerService
                 if (carry != null)
                 {
                     head = carry;
-                    carry = null;
+                    carry = default;
                 }
                 else
                 {
@@ -75,36 +75,20 @@ public partial class RabbitMqConsumerService
                 }
 
                 var last = head;
-                var windowEnd = head.UpdateDate + _window;
 
-                while (true)
+                // Only compare message timestamps; do not use wall clock
+                while (reader.TryRead(out var next))
                 {
-                    var remaining = windowEnd - DateTime.UtcNow;
-                    if (remaining <= TimeSpan.Zero)
-                        break;
-
-                    var readTask = reader.ReadAsync(_stopToken).AsTask();
-                    var delayTask = Task.Delay(remaining, _stopToken);
-                    var completed = await Task.WhenAny(readTask, delayTask);
-
-                    // ReSharper disable once InvertIf
-                    if (completed == readTask)
+                    if ((next.UpdateDate - last.UpdateDate) <= _window)
                     {
-                        var next = readTask.Result;
-                        // If next belongs to this sliding window (relative to last), replace last
-                        if ((next.UpdateDate - last.UpdateDate) <= _window)
-                        {
-                            // ignore previous last
-                            await _ignoreMessageAsync(last, _stopToken);
-                            last = next;
-                            windowEnd = last.UpdateDate + _window; // slide the window
-                            continue;
-                        }
-
-                        // next is outside window; keep it for next iteration
-                        carry = next;
-                        break;
+                        await _ignoreMessageAsync(last, _stopToken); // ignore previous last
+                        last = next; // keep the most recent within the window
+                        continue;
                     }
+
+                    // Next is outside the window; keep it for next iteration
+                    carry = next;
+                    break;
                 }
 
                 // Process the chosen last message
