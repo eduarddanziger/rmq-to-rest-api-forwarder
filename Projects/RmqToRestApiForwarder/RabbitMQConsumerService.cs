@@ -1,13 +1,15 @@
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RmqToRestApiForwarder.Contracts;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using static RmqToRestApiForwarder.Contracts.MessageFields;
 
 namespace RmqToRestApiForwarder;
 
-public class RabbitMqConsumerService : BackgroundService
+public partial class RabbitMqConsumerService : BackgroundService
 {
     // Durable retry settings
     private const string AttemptHeader = "x-attempt";
@@ -35,6 +37,10 @@ public class RabbitMqConsumerService : BackgroundService
 
     private IConnection? _connection;
     private readonly string _apiTarget;
+
+    // Debounce workers for sound-volume events
+    private DebounceWorker? _renderDebouncer;
+    private DebounceWorker? _captureDebouncer;
 
     public RabbitMqConsumerService(IOptions<RabbitMqServerSettings> rmqServerSettings,
         IOptions<RabbitMqMessageDeliverySettings> rmqMessageDeliverySettings,
@@ -78,7 +84,8 @@ public class RabbitMqConsumerService : BackgroundService
         };
         _logger.LogInformation(
             "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay}",
-            _queueName, _retryQueueName, _failedQueueName, _apiTarget, _maxRetryAttempts, (int)_retryDelay.TotalSeconds);
+            _queueName, _retryQueueName, _failedQueueName, _apiTarget, _maxRetryAttempts,
+            (int)_retryDelay.TotalSeconds);
     }
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -128,6 +135,39 @@ public class RabbitMqConsumerService : BackgroundService
                 failedArgs!,
                 cancellationToken: cancellationToken);
 
+            // Initialize debouncers
+            _renderDebouncer = new DebounceWorker(
+                name: "VolumeRenderChanged",
+                window: TimeSpan.FromMilliseconds(400),
+                processMessageAsync: async (msg, ct) =>
+                {
+                    _logger.LogInformation("Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be PROCESSED", msg.UpdateDate);
+                    await ProcessMessageAsync(msg, ct);
+                },
+                ignoreMessageAsync: (msg, ct) =>
+                {
+                    _logger.LogInformation("Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be IGNORED", msg.UpdateDate);
+                    return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
+                },
+                _logger,
+                cancellationToken);
+
+            _captureDebouncer = new DebounceWorker(
+                name: "VolumeCaptureChanged",
+                window: TimeSpan.FromMilliseconds(400),
+                processMessageAsync: async (msg, ct) =>
+                {
+                    _logger.LogInformation("Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be PROCESSED.", msg.UpdateDate);
+                    await ProcessMessageAsync(msg, ct);
+                },
+                ignoreMessageAsync: (msg, ct) =>
+                {
+                    _logger.LogInformation("Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be IGNORED", msg.UpdateDate);
+                    return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
+                },
+                _logger,
+                cancellationToken);
+
             var consumer = new AsyncEventingBasicConsumer(_channel);
             consumer.ReceivedAsync += async (_, deliveryEvent) =>
             {
@@ -135,47 +175,63 @@ public class RabbitMqConsumerService : BackgroundService
                 {
                     var body = deliveryEvent.Body.ToArray();
                     var attempt = GetAttempt(deliveryEvent.BasicProperties.Headers);
-
                     var message = JsonNode.Parse(body)!.AsObject();
-                    var httpRequest = message["httpRequest"]?.GetValue<string>();
-                    var urlSuffix = message["urlSuffix"]?.GetValue<string>();
-                    message.Remove("httpRequest");
-                    message.Remove("urlSuffix");
+
+                    // Parse event info (optional fields)
+                    var deviceMessageTypeAsInt = message[MessageFields.DeviceMessageType]?.GetValue<int?>();
+                    var updateDateAsString = message[MessageFields.UpdateDate]?.GetValue<string>();
+                    var updateDate = ParseToUtc(updateDateAsString);
+                    var deviceEventType = deviceMessageTypeAsInt.HasValue
+                        ? (DeviceEventType)deviceMessageTypeAsInt.Value
+                        : DeviceEventType.Confirmed;
+
+                    // Http-specific fields
+                    var httpRequest = message[MessageFields.HttpRequest]?.GetValue<string>();
+                    var urlSuffix = message[MessageFields.UrlSuffix]?.GetValue<string>();
+                    message.Remove(MessageFields.HttpRequest);
+                    message.Remove(MessageFields.UrlSuffix);
 
                     _logger.LogInformation(
                         "Received a message with HTTP request (Attempt {Attempt}/{MaxAttempts}): \"{Method}\", suffix \"{Suffix}\", payload:\n{Payload}",
                         attempt, _maxRetryAttempts, httpRequest, urlSuffix,
                         message.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
-                    var result = await SendToApiAsync(httpRequest, urlSuffix, message, cancellationToken);
+                    var pending = new PendingMessage(
+                        deliveryEvent.DeliveryTag,
+                        body,
+                        attempt,
+                        httpRequest,
+                        urlSuffix,
+                        message,
+                        updateDate);
 
-                    if (result.Success)
+                    switch (deviceEventType)
                     {
-                        await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken);
-                        _logger.LogInformation("Message processed successfully on attempt {Attempt}", attempt);
+                        case DeviceEventType.VolumeRenderChanged when _renderDebouncer != null:
+                            await _renderDebouncer!.EnqueueAsync(pending);
+                            _logger.LogInformation("Enqueued {Type} message at {UpdateDate:o} for debounce.", deviceEventType,
+                                updateDate);
+                            break;
+                        case DeviceEventType.VolumeCaptureChanged when _captureDebouncer != null:
+                            await _captureDebouncer!.EnqueueAsync(pending);
+                            _logger.LogInformation("Enqueued {Type} message at {UpdateDate:o} for debounce.", deviceEventType,
+                                updateDate);
+                            break;
+                        case DeviceEventType.Confirmed:
+                        case DeviceEventType.Discovered:
+                        case DeviceEventType.Detached:
+                        case DeviceEventType.DefaultRenderChanged:
+                        case DeviceEventType.DefaultCaptureChanged:
+                        default:
+                            await ProcessMessageAsync(pending, cancellationToken);
+                            break;
                     }
-                    else
-                    {
-                        if (attempt < _maxRetryAttempts)
-                        {
-                            await PublishWithAttemptAsync(_retryQueueName, body, attempt + 1, cancellationToken);
-                            await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken); // remove original
-                            _logger.LogWarning(
-                                "Attempt {Attempt} failed. Scheduled retry attempt {NextAttempt} after {Delay}s. Reason: {Reason}",
-                                attempt, attempt + 1, (int)_retryDelay.TotalSeconds, result.ErrorReason);
-                        }
-                        else
-                        {
-                            await PublishWithAttemptAsync(_failedQueueName, body, attempt, cancellationToken);
-                            await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken); // remove original
-                            _logger.LogError("Attempt {Attempt} (max) failed. Routed to failed queue. Reason: {Reason}",
-                                attempt, result.ErrorReason);
-                        }
-                    }
+
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unexpected exception during message processing. Moving message to failed queue.");
+                    _logger.LogError(ex,
+                        "Unexpected exception during message processing. Moving message to failed queue.");
                     try
                     {
                         if (_channel != null)
@@ -298,9 +354,11 @@ public class RabbitMqConsumerService : BackgroundService
             {
                 await _codespaceAwaker.Awake(cancellationToken);
             }
+
             var reason = $"Exception: {ex.Message}";
             return new ProcessingResult(false, reason);
         }
+
         return new ProcessingResult(true, null);
     }
 
@@ -313,4 +371,49 @@ public class RabbitMqConsumerService : BackgroundService
     }
 
     private readonly record struct ProcessingResult(bool Success, string? ErrorReason);
+
+    private async Task ProcessMessageAsync(PendingMessage msg, CancellationToken ct)
+    {
+        _logger.LogInformation(
+            "Processing message (Attempt {Attempt}/{MaxAttempts}): \"{Method}\", suffix \"{Suffix}\". UpdateDate: {UpdateDate:o}",
+            msg.Attempt, _maxRetryAttempts, msg.HttpMethod, msg.UrlSuffix, msg.UpdateDate);
+
+        var result = await SendToApiAsync(msg.HttpMethod, msg.UrlSuffix, msg.Payload, ct);
+
+        if (result.Success)
+        {
+            await _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
+            _logger.LogInformation("Message processed successfully on attempt {Attempt}", msg.Attempt);
+        }
+        else
+        {
+            if (msg.Attempt < _maxRetryAttempts)
+            {
+                await PublishWithAttemptAsync(_retryQueueName, msg.Body, msg.Attempt + 1, ct);
+                await _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
+                _logger.LogWarning(
+                    "Attempt {Attempt} failed. Scheduled retry attempt {NextAttempt} after {Delay}s. Reason: {Reason}",
+                    msg.Attempt, msg.Attempt + 1, (int)_retryDelay.TotalSeconds, result.ErrorReason);
+            }
+            else
+            {
+                await PublishWithAttemptAsync(_failedQueueName, msg.Body, msg.Attempt, ct);
+                await _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
+                _logger.LogError("Attempt {Attempt} (max) failed. Routed to failed queue. Reason: {Reason}",
+                    msg.Attempt, result.ErrorReason);
+            }
+        }
+    }
+
+    private static DateTime ParseToUtc(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return DateTime.MinValue;
+        if (DateTimeOffset.TryParse(input, out var dto)) return dto.UtcDateTime;
+        if (DateTime.TryParse(input, out var dt))
+        {
+            return dt.Kind == DateTimeKind.Local ? dt.ToUniversalTime() : dt;
+        }
+
+        return DateTime.MinValue;
+    }
 }
