@@ -35,7 +35,7 @@ public class GitHubCodespaceAwaker(IOptions<GitHubCodespaceSettings> codespaceSe
     {
         if (State != RequestState.Idle)
         {
-            logger.LogDebug("Awake() call ignored because current state is {State}", State);
+            logger.LogInformation("Awake() call ignored because current state is {State}", State);
             return;
         }
         State = RequestState.Requested;
@@ -71,7 +71,7 @@ public class GitHubCodespaceAwaker(IOptions<GitHubCodespaceSettings> codespaceSe
                 }
                 catch (Exception readEx)
                 {
-                    logger.LogDebug(readEx, "Failed reading error response body");
+                    logger.LogInformation(readEx, "Failed reading error response body");
                 }
                 var reason = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
                 logger.LogWarning("GitHub Codespace start request failed: {Reason}. Body: {Body}", reason, body);

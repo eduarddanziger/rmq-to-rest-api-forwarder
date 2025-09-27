@@ -12,6 +12,8 @@ public record RabbitMqMessageDeliverySettings
 {
     public int MaxRetryAttempts { get; init; } = 5;
     public int RetryDelayInSeconds { get; init; } = 10;
+    // Debouncing interval for VolumeRenderChanged/VolumeCaptureChanged events (milliseconds)
+    public int VolumeChangeEventDebouncingWindowInMilliseconds { get; init; } = 400;
 }
 
 public record ApiBaseUrlSettings
