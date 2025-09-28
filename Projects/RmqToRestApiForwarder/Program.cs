@@ -32,4 +32,4 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddHostedService<RabbitMqConsumerService>();
     });
 
-await builder.RunConsoleAsync();
+await builder.Build().RunAsync();
