@@ -158,12 +158,6 @@ public partial class RabbitMqConsumerService : BackgroundService
                     failedArgs!,
                     cancellationToken: cancellationToken);
 
-                await VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync([
-                    new QueueInfo(_queueName),
-                    new QueueInfo(_retryQueueName),
-                    new QueueInfo(_failedQueueName)
-                ], cancellationToken);
-
                 _logger.LogInformation("Connection and topology are ready.");
                 return;
             }
@@ -205,22 +199,6 @@ public partial class RabbitMqConsumerService : BackgroundService
             }
     }
 
-    private async Task VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync(IEnumerable<QueueInfo> queues, CancellationToken cancellationToken)
-    {
-        try
-        {
-            foreach (var q in queues)
-            {
-                await _channel!.QueueDeclarePassiveAsync(q.Name, cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            throw new Exception("Topology verification failed: one or more queues are missing.", ex);
-        }
-    }
-
-    // Start the consumer on the current channel
     private async Task StartConsumerAsync(CancellationToken cancellationToken)
     {
         _renderDebouncer = new DebounceWorker(
@@ -492,5 +470,4 @@ public partial class RabbitMqConsumerService : BackgroundService
     }
 
     private readonly record struct ProcessingResult(bool Success, string? ErrorReason);
-    private readonly record struct QueueInfo(string Name);
 }
