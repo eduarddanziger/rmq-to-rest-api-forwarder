@@ -6,8 +6,10 @@ public record RabbitMqServerSettings
     public string QueueName { get; init; } = "sdr_queue";
     public string UserName { get; init; } = "guest";
     public string Password { get; init; } = "guest";
-    // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Global
+    // ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
+    public int Port { get; init; } = 5671;
     public int NetworkRecoveryIntervalInSeconds { get; init; } = 3;
+    // ReSharper restore AutoPropertyCanBeMadeGetOnly.Global
 }
 
 public record RabbitMqMessageDeliverySettings

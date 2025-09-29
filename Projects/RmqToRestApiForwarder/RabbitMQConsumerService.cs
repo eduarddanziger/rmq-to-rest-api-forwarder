@@ -54,6 +54,7 @@ public partial class RabbitMqConsumerService : BackgroundService
             HostName = rmqServerSettings.Value.HostName,
             UserName = rmqServerSettings.Value.UserName,
             Password = rmqServerSettings.Value.Password,
+            Port = rmqServerSettings.Value.Port,
             AutomaticRecoveryEnabled = true,
             TopologyRecoveryEnabled = true,
             NetworkRecoveryInterval = TimeSpan.FromSeconds(recoverySeconds)
@@ -159,6 +160,12 @@ public partial class RabbitMqConsumerService : BackgroundService
                     failedArgs!,
                     cancellationToken: cancellationToken);
 
+                await VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync([
+                    new QueueInfo(_queueName),
+                    new QueueInfo(_retryQueueName),
+                    new QueueInfo(_failedQueueName)
+                ], cancellationToken);
+
                 _logger.LogInformation("Connection and topology are ready.");
                 return;
             }
@@ -200,46 +207,19 @@ public partial class RabbitMqConsumerService : BackgroundService
             }
     }
 
-    // Initialize debouncers once
-    private void InitializeDebouncersIfNeeded(CancellationToken cancellationToken)
+    private async Task VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync(IEnumerable<QueueInfo> queues, CancellationToken cancellationToken)
     {
-        _renderDebouncer = new DebounceWorker(
-            "VolumeRenderChanged",
-            _volumeDebounceWindow,
-            async (msg, ct) =>
+        try
+        {
+            foreach (var q in queues)
             {
-                _logger.LogInformation(
-                    "Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be PROCESSED",
-                    msg.UpdateDate);
-                await ProcessMessageAsync(msg, ct);
-            },
-            (msg, ct) =>
-            {
-                _logger.LogInformation("Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be IGNORED",
-                    msg.UpdateDate);
-                return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
-            },
-            _logger,
-            cancellationToken);
-
-        _captureDebouncer = new DebounceWorker(
-            "VolumeCaptureChanged",
-            _volumeDebounceWindow,
-            async (msg, ct) =>
-            {
-                _logger.LogInformation(
-                    "Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be PROCESSED.",
-                    msg.UpdateDate);
-                await ProcessMessageAsync(msg, ct);
-            },
-            (msg, ct) =>
-            {
-                _logger.LogInformation("Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be IGNORED",
-                    msg.UpdateDate);
-                return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
-            },
-            _logger,
-            cancellationToken);
+                await _channel!.QueueDeclarePassiveAsync(q.Name, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Topology verification failed: one or more queues are missing.", ex);
+        }
     }
 
     // Start the consumer on the current channel
@@ -514,4 +494,5 @@ public partial class RabbitMqConsumerService : BackgroundService
     }
 
     private readonly record struct ProcessingResult(bool Success, string? ErrorReason);
+    private readonly record struct QueueInfo(string Name);
 }
