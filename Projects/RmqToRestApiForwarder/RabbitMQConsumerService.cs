@@ -136,8 +136,7 @@ public partial class RabbitMqConsumerService : BackgroundService
                 {
                     ["x-dead-letter-exchange"] = string.Empty,
                     ["x-dead-letter-routing-key"] = _queueName,
-                    ["x-message-ttl"] = (int)_retryDelay.TotalMilliseconds,
-                    ["x-expires"] = (int)_retryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds
+                    ["x-message-ttl"] = (int)_retryDelay.TotalMilliseconds
                 };
                 await _channel.QueueDeclareAsync(
                     _retryQueueName,
@@ -149,8 +148,7 @@ public partial class RabbitMqConsumerService : BackgroundService
 
                 var failedArgs = new Dictionary<string, object>
                 {
-                    ["x-message-ttl"] = (int)TimeSpan.FromHours(24).TotalMilliseconds,
-                    ["x-expires"] = (int)TimeSpan.FromHours(25).TotalMilliseconds
+                    ["x-message-ttl"] = (int)TimeSpan.FromHours(24).TotalMilliseconds
                 };
                 await _channel.QueueDeclareAsync(
                     _failedQueueName,
@@ -159,12 +157,6 @@ public partial class RabbitMqConsumerService : BackgroundService
                     false,
                     failedArgs!,
                     cancellationToken: cancellationToken);
-
-                await VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync([
-                    new QueueInfo(_queueName),
-                    new QueueInfo(_retryQueueName),
-                    new QueueInfo(_failedQueueName)
-                ], cancellationToken);
 
                 _logger.LogInformation("Connection and topology are ready.");
                 return;
@@ -207,22 +199,6 @@ public partial class RabbitMqConsumerService : BackgroundService
             }
     }
 
-    private async Task VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync(IEnumerable<QueueInfo> queues, CancellationToken cancellationToken)
-    {
-        try
-        {
-            foreach (var q in queues)
-            {
-                await _channel!.QueueDeclarePassiveAsync(q.Name, cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            throw new Exception("Topology verification failed: one or more queues are missing.", ex);
-        }
-    }
-
-    // Start the consumer on the current channel
     private async Task StartConsumerAsync(CancellationToken cancellationToken)
     {
         _renderDebouncer = new DebounceWorker(
@@ -494,5 +470,4 @@ public partial class RabbitMqConsumerService : BackgroundService
     }
 
     private readonly record struct ProcessingResult(bool Success, string? ErrorReason);
-    private readonly record struct QueueInfo(string Name);
 }
