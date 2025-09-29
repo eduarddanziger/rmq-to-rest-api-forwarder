@@ -23,14 +23,14 @@ forwards the JSON payloads to a configured REST API endpoint.
 
 1. Install RabbitMQ locally, e.g., via Chocolatey:
 ```powershell
-choco install rabbitmq -y
+choco install rabbitmq
 ```
+2. Download and unzip the latest rollout of RabbitMQ To REST API Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
 
-2. Configure settings in appsettings.json:
-   - RabbitMQ: HostName, UserName, Password, QueueName
-   - ApiBaseUrl: set the target (AzureUrl or LocalVmUrl, etc.) used by the service
-
-3. Download and unzip the latest rollout of RabbitMQ To REST API Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
+3. Configure settings in appsettings.json:
+   - RabbitMQ::Service: UserName, Password, keep the default HostName, Port and QueueName for standard local installation
+   - The RabbitMQ::Service::NetworkRecoveryIntervalInSeconds and the rest of options like RabbitMQ::MessageDelivery are mostly appropriate
+   - ApiBaseUrl::Target can be Codespace (default) or Azure, depending onm the REST API backend location you want to use
 
 4. Use it as a Windows Service or, alternatively, run it from a command prompt.
 
