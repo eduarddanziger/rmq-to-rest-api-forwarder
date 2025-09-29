@@ -49,11 +49,15 @@ public partial class RabbitMqConsumerService : BackgroundService
         GitHubCodespaceAwaker codespaceAwaker,
         ILogger<RabbitMqConsumerService> logger)
     {
+        var recoverySeconds = Math.Max(0, rmqServerSettings.Value.NetworkRecoveryIntervalInSeconds);
         _connectionFactory = new ConnectionFactory
         {
             HostName = rmqServerSettings.Value.HostName,
             UserName = rmqServerSettings.Value.UserName,
-            Password = rmqServerSettings.Value.Password
+            Password = rmqServerSettings.Value.Password,
+            AutomaticRecoveryEnabled = true,
+            TopologyRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(recoverySeconds)
         };
         _codespaceAwaker = codespaceAwaker;
         _logger = logger;
@@ -86,9 +90,9 @@ public partial class RabbitMqConsumerService : BackgroundService
             _ => apiSettings.Value.Azure
         };
         _logger.LogInformation(
-            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay} VolumeDebounceWindowMs {Debounce}",
+            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay} VolumeDebounceWindowMs {Debounce} RecoveryIntervalSeconds {Recovery}",
             _queueName, _retryQueueName, _failedQueueName, _apiTarget, _maxRetryAttempts,
-            (int)_retryDelay.TotalSeconds, (int)_volumeDebounceWindow.TotalMilliseconds);
+            (int)_retryDelay.TotalSeconds, (int)_volumeDebounceWindow.TotalMilliseconds, recoverySeconds);
     }
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
