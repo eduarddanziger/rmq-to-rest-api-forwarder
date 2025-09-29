@@ -2,10 +2,14 @@ namespace RmqToRestApiForwarder;
 
 public record RabbitMqServerSettings
 {
-    public string HostName { get; init; } = string.Empty;
-    public string QueueName { get; init; } = string.Empty;
-    public string UserName { get; init; } = string.Empty;
-    public string Password { get; init; } = string.Empty;
+    public string HostName { get; init; } = "localhost";
+    public string QueueName { get; init; } = "sdr_queue";
+    public string UserName { get; init; } = "guest";
+    public string Password { get; init; } = "guest";
+    // ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
+    public int Port { get; init; } = 5671;
+    public int NetworkRecoveryIntervalInSeconds { get; init; } = 3;
+    // ReSharper restore AutoPropertyCanBeMadeGetOnly.Global
 }
 
 public record RabbitMqMessageDeliverySettings

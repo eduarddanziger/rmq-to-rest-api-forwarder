@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using System.Threading.Channels;
 
 namespace RmqToRestApiForwarder;
@@ -11,7 +10,6 @@ public partial class RabbitMqConsumerService
         int Attempt,
         string? HttpMethod,
         string? UrlSuffix,
-        JsonObject Payload,
         DateTime UpdateDate
     );
 
@@ -60,7 +58,7 @@ public partial class RabbitMqConsumerService
                 if (carry != null)
                 {
                     head = carry;
-                    carry = default;
+                    carry = null;
                 }
                 else
                 {
@@ -76,10 +74,9 @@ public partial class RabbitMqConsumerService
 
                 var last = head;
 
-                // Only compare message timestamps; do not use wall clock
                 while (reader.TryRead(out var next))
                 {
-                    if ((next.UpdateDate - last.UpdateDate) <= _window)
+                    if ((next.UpdateDate - last.UpdateDate) <= _window) // within the time window?
                     {
                         await _ignoreMessageAsync(last, _stopToken); // ignore previous last
                         last = next; // keep the most recent within the window

@@ -1,10 +1,9 @@
-using Microsoft.Extensions.Options;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
-using RmqToRestApiForwarder.Contracts;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Options;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 using static RmqToRestApiForwarder.Contracts.MessageFields;
 
 namespace RmqToRestApiForwarder;
@@ -13,10 +12,6 @@ public partial class RabbitMqConsumerService : BackgroundService
 {
     // Durable retry settings
     private const string AttemptHeader = "x-attempt";
-
-    private readonly int _maxRetryAttempts;
-    private readonly TimeSpan _retryDelay;
-    private readonly TimeSpan _volumeDebounceWindow;
 
     private static readonly string[] _validTargets =
     [
@@ -28,20 +23,24 @@ public partial class RabbitMqConsumerService : BackgroundService
         Array.ConvertAll(_validTargets, v => $"\"{v}\""));
 
     private readonly string _apiEndpoint;
+    private readonly string _apiTarget;
+    private readonly GitHubCodespaceAwaker _codespaceAwaker;
     private readonly IConnectionFactory _connectionFactory;
     private readonly string _failedQueueName;
-    private readonly GitHubCodespaceAwaker _codespaceAwaker;
     private readonly ILogger<RabbitMqConsumerService> _logger;
+
+    private readonly int _maxRetryAttempts;
     private readonly string _queueName;
+    private readonly TimeSpan _retryDelay;
     private readonly string _retryQueueName;
+    private readonly TimeSpan _volumeDebounceWindow;
+    private DebounceWorker? _captureDebouncer;
     private IChannel? _channel;
 
     private IConnection? _connection;
-    private readonly string _apiTarget;
 
     // Debounce workers for sound-volume events
     private DebounceWorker? _renderDebouncer;
-    private DebounceWorker? _captureDebouncer;
 
     public RabbitMqConsumerService(IOptions<RabbitMqServerSettings> rmqServerSettings,
         IOptions<RabbitMqMessageDeliverySettings> rmqMessageDeliverySettings,
@@ -49,11 +48,16 @@ public partial class RabbitMqConsumerService : BackgroundService
         GitHubCodespaceAwaker codespaceAwaker,
         ILogger<RabbitMqConsumerService> logger)
     {
+        var recoverySeconds = Math.Max(0, rmqServerSettings.Value.NetworkRecoveryIntervalInSeconds);
         _connectionFactory = new ConnectionFactory
         {
             HostName = rmqServerSettings.Value.HostName,
             UserName = rmqServerSettings.Value.UserName,
-            Password = rmqServerSettings.Value.Password
+            Password = rmqServerSettings.Value.Password,
+            Port = rmqServerSettings.Value.Port,
+            AutomaticRecoveryEnabled = true,
+            TopologyRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(recoverySeconds)
         };
         _codespaceAwaker = codespaceAwaker;
         _logger = logger;
@@ -86,195 +90,270 @@ public partial class RabbitMqConsumerService : BackgroundService
             _ => apiSettings.Value.Azure
         };
         _logger.LogInformation(
-            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay} VolumeDebounceWindowMs {Debounce}",
+            "Consumer service parameters initialized: Queue \"{Queue}\" RetryQueue \"{RetryQueue}\" FailedQueue \"{FailedQueue}\" Target REST API \"{ApiTarget}\" MaxRetryAttempts {MaxAttempts} RetryDelaySeconds {RetryDelay} VolumeDebounceWindowMs {Debounce} RecoveryIntervalSeconds {Recovery}",
             _queueName, _retryQueueName, _failedQueueName, _apiTarget, _maxRetryAttempts,
-            (int)_retryDelay.TotalSeconds, (int)_volumeDebounceWindow.TotalMilliseconds);
+            _retryDelay.TotalSeconds, _volumeDebounceWindow.TotalMilliseconds, recoverySeconds);
     }
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Consumer service initialization started...");
 
-        try
+        await EnsureConnectionAndTopologyReadyAsync(cancellationToken);
+
+        await StartConsumerAsync(cancellationToken);
+
+        // 3) Keep the service alive until shutdown (auto-recovery handles transient drops)
+        await Task.Delay(Timeout.Infinite, cancellationToken);
+    }
+
+    // Ensures connection + channel + required queues exist. Retries until success or cancellation
+    private async Task EnsureConnectionAndTopologyReadyAsync(CancellationToken cancellationToken)
+    {
+        var connectRetryDelays = new[]
         {
-            _connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
-            _channel = await _connection.CreateChannelAsync(null, cancellationToken);
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(5)
+        };
+        var maxConnectRetryDelay = TimeSpan.FromSeconds(10);
+        var connectRetryIndex = 0;
 
-            // Primary work queue (messages consumed here)
-            await _channel.QueueDeclareAsync(
-                _queueName,
-                true,
-                false,
-                false,
-                cancellationToken: cancellationToken);
-
-            // Retry queue: messages sit here for TTL then are dead-lettered (x-dead-letter-exchange="") back to the primary queue
-            var retryArgs = new Dictionary<string, object>
+        while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                ["x-dead-letter-exchange"] = string.Empty,
-                ["x-dead-letter-routing-key"] = _queueName,
-                ["x-message-ttl"] = (int)_retryDelay.TotalMilliseconds,
-                ["x-expires"] = (int)_retryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds
-            };
-            await _channel.QueueDeclareAsync(
-                _retryQueueName,
-                true,
-                false,
-                false,
-                retryArgs!,
-                cancellationToken: cancellationToken);
+                _connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+                _channel = await _connection.CreateChannelAsync(null, cancellationToken);
 
-            // Failed (dead) queue: final resting place after max attempts (messages expire after 24h)
-            var failedArgs = new Dictionary<string, object>
+                await _channel.QueueDeclareAsync(
+                    _queueName,
+                    true,
+                    false,
+                    false,
+                    cancellationToken: cancellationToken);
+
+                var retryArgs = new Dictionary<string, object>
+                {
+                    ["x-dead-letter-exchange"] = string.Empty,
+                    ["x-dead-letter-routing-key"] = _queueName,
+                    ["x-message-ttl"] = (int)_retryDelay.TotalMilliseconds,
+                    ["x-expires"] = (int)_retryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds
+                };
+                await _channel.QueueDeclareAsync(
+                    _retryQueueName,
+                    true,
+                    false,
+                    false,
+                    retryArgs!,
+                    cancellationToken: cancellationToken);
+
+                var failedArgs = new Dictionary<string, object>
+                {
+                    ["x-message-ttl"] = (int)TimeSpan.FromHours(24).TotalMilliseconds,
+                    ["x-expires"] = (int)TimeSpan.FromHours(25).TotalMilliseconds
+                };
+                await _channel.QueueDeclareAsync(
+                    _failedQueueName,
+                    true,
+                    false,
+                    false,
+                    failedArgs!,
+                    cancellationToken: cancellationToken);
+
+                await VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync([
+                    new QueueInfo(_queueName),
+                    new QueueInfo(_retryQueueName),
+                    new QueueInfo(_failedQueueName)
+                ], cancellationToken);
+
+                _logger.LogInformation("Connection and topology are ready.");
+                return;
+            }
+            catch (OperationCanceledException)
             {
-                ["x-message-ttl"] = (int)TimeSpan.FromHours(24).TotalMilliseconds,
-                ["x-expires"] = (int)TimeSpan.FromHours(25).TotalMilliseconds
-            };
-            await _channel.QueueDeclareAsync(
-                _failedQueueName,
-                true,
-                false,
-                false,
-                failedArgs!,
-                cancellationToken: cancellationToken);
-
-            // Initialize debouncers with configured window
-            _renderDebouncer = new DebounceWorker(
-                name: "VolumeRenderChanged",
-                window: _volumeDebounceWindow,
-                processMessageAsync: async (msg, ct) =>
-                {
-                    _logger.LogInformation("Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be PROCESSED", msg.UpdateDate);
-                    await ProcessMessageAsync(msg, ct);
-                },
-                ignoreMessageAsync: (msg, ct) =>
-                {
-                    _logger.LogInformation("Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be IGNORED", msg.UpdateDate);
-                    return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
-                },
-                _logger,
-                cancellationToken);
-
-            _captureDebouncer = new DebounceWorker(
-                name: "VolumeCaptureChanged",
-                window: _volumeDebounceWindow,
-                processMessageAsync: async (msg, ct) =>
-                {
-                    _logger.LogInformation("Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be PROCESSED.", msg.UpdateDate);
-                    await ProcessMessageAsync(msg, ct);
-                },
-                ignoreMessageAsync: (msg, ct) =>
-                {
-                    _logger.LogInformation("Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be IGNORED", msg.UpdateDate);
-                    return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
-                },
-                _logger,
-                cancellationToken);
-
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.ReceivedAsync += async (_, deliveryEvent) =>
+                throw;
+            }
+            catch (Exception ex)
             {
                 try
                 {
-                    var body = deliveryEvent.Body.ToArray();
-                    var attempt = GetAttempt(deliveryEvent.BasicProperties.Headers);
-                    var message = JsonNode.Parse(body)!.AsObject();
-
-                    // Parse event info (optional fields)
-                    var deviceMessageTypeAsInt = message[MessageFields.DeviceMessageType]?.GetValue<int?>();
-                    var updateDateAsString = message[MessageFields.UpdateDate]?.GetValue<string>();
-                    var updateDate = ParseToUtc(updateDateAsString);
-                    var deviceEventType = deviceMessageTypeAsInt.HasValue
-                        ? (DeviceEventType)deviceMessageTypeAsInt.Value
-                        : DeviceEventType.Confirmed;
-
-                    // Http-specific fields
-                    var httpRequest = message[MessageFields.HttpRequest]?.GetValue<string>();
-                    var urlSuffix = message[MessageFields.UrlSuffix]?.GetValue<string>();
-                    message.Remove(MessageFields.HttpRequest);
-                    message.Remove(MessageFields.UrlSuffix);
-
-                    _logger.LogInformation(
-                        "Received a message with HTTP request (Attempt {Attempt}/{MaxAttempts}): \"{Method}\", suffix \"{Suffix}\", payload:\n{Payload}",
-                        attempt, _maxRetryAttempts, httpRequest, urlSuffix,
-                        message.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-
-                    var pending = new PendingMessage(
-                        deliveryEvent.DeliveryTag,
-                        body,
-                        attempt,
-                        httpRequest,
-                        urlSuffix,
-                        message,
-                        updateDate);
-
-                    switch (deviceEventType)
-                    {
-                        case DeviceEventType.VolumeRenderChanged when _renderDebouncer != null:
-                            await _renderDebouncer!.EnqueueAsync(pending);
-                            _logger.LogInformation("Enqueued {Type} message at {UpdateDate:o} for debounce.", deviceEventType,
-                                updateDate);
-                            break;
-                        case DeviceEventType.VolumeCaptureChanged when _captureDebouncer != null:
-                            await _captureDebouncer!.EnqueueAsync(pending);
-                            _logger.LogInformation("Enqueued {Type} message at {UpdateDate:o} for debounce.", deviceEventType,
-                                updateDate);
-                            break;
-                        case DeviceEventType.Confirmed:
-                        case DeviceEventType.Discovered:
-                        case DeviceEventType.Detached:
-                        case DeviceEventType.DefaultRenderChanged:
-                        case DeviceEventType.DefaultCaptureChanged:
-                        default:
-                            await ProcessMessageAsync(pending, cancellationToken);
-                            break;
-                    }
-
+                    _channel?.Dispose();
                 }
-                catch (Exception ex)
+                catch
                 {
-                    _logger.LogError(ex,
-                        "Unexpected exception during message processing. Moving message to failed queue.");
-                    try
-                    {
-                        if (_channel != null)
-                        {
-                            var body = deliveryEvent.Body.ToArray();
-                            var attempt = GetAttempt(deliveryEvent.BasicProperties.Headers);
-
-                            await PublishWithAttemptAsync(_failedQueueName, body, attempt, cancellationToken);
-                            await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken);
-                        }
-                    }
-                    catch (Exception republishEx)
-                    {
-                        _logger.LogError(republishEx, "Failed to move message to failed queue.");
-                        if (_channel != null)
-                            await _channel.BasicNackAsync(deliveryEvent.DeliveryTag, false, false, cancellationToken);
-                    }
+                    /* ignored */
                 }
-            };
 
-            await _channel.BasicConsumeAsync(
-                _queueName,
-                false,
-                consumer,
-                cancellationToken);
+                try
+                {
+                    _connection?.Dispose();
+                }
+                catch
+                {
+                    /* ignored */
+                }
 
-            await Task.Delay(Timeout.Infinite, cancellationToken);
-        }
-        catch (OperationCanceledException)
+                _channel = null;
+                _connection = null;
+
+                var nextDelay = connectRetryIndex < connectRetryDelays.Length
+                    ? connectRetryDelays[connectRetryIndex]
+                    : maxConnectRetryDelay;
+                connectRetryIndex = Math.Min(connectRetryIndex + 1, connectRetryDelays.Length);
+
+                _logger.LogWarning(ex, "Connection/topology setup failed. Retrying in {DelaySeconds}s",
+                    nextDelay.TotalSeconds);
+                await Task.Delay(nextDelay, cancellationToken);
+            }
+    }
+
+    private async Task VerifyIfQueuesCreatedOtherwiseThrowExceptionAsync(IEnumerable<QueueInfo> queues, CancellationToken cancellationToken)
+    {
+        try
         {
-            // Normal shutdown
+            foreach (var q in queues)
+            {
+                await _channel!.QueueDeclarePassiveAsync(q.Name, cancellationToken);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error occurred in consumer service");
+            throw new Exception("Topology verification failed: one or more queues are missing.", ex);
         }
-        finally
+    }
+
+    // Start the consumer on the current channel
+    private async Task StartConsumerAsync(CancellationToken cancellationToken)
+    {
+        _renderDebouncer = new DebounceWorker(
+            "VolumeRenderChanged",
+            _volumeDebounceWindow,
+            async (msg, ct) =>
+            {
+                _logger.LogInformation(
+                    "Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be PROCESSED",
+                    msg.UpdateDate);
+                await ProcessMessageAsync(msg, ct);
+            },
+            (msg, ct) =>
+            {
+                _logger.LogInformation("Debouncing chosen VolumeRenderChanged message at {UpdateDate:o} to be IGNORED",
+                    msg.UpdateDate);
+                return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
+            },
+            _logger,
+            cancellationToken);
+
+        _captureDebouncer = new DebounceWorker(
+            "VolumeCaptureChanged",
+            _volumeDebounceWindow,
+            async (msg, ct) =>
+            {
+                _logger.LogInformation(
+                    "Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be PROCESSED.",
+                    msg.UpdateDate);
+                await ProcessMessageAsync(msg, ct);
+            },
+            (msg, ct) =>
+            {
+                _logger.LogInformation("Debouncing chosen VolumeCaptureChanged message at {UpdateDate:o} to be IGNORED",
+                    msg.UpdateDate);
+                return _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
+            },
+            _logger,
+            cancellationToken);
+
+        var consumer = new AsyncEventingBasicConsumer(_channel!);
+        consumer.ReceivedAsync += async (_, deliveryEvent) =>
         {
-            _logger.LogInformation("Consumer service stopping...");
-        }
+            try
+            {
+                var eventBody = deliveryEvent.Body.ToArray();
+                var eventHeaderAttempt = GetAttempt(deliveryEvent.BasicProperties.Headers);
+                var eventMessage = JsonNode.Parse(eventBody)!.AsObject();
+
+                // Parse event info (optional fields)
+                var deviceMessageTypeAsInt = eventMessage[DeviceMessageType]?.GetValue<int?>();
+                var updateDateAsString = eventMessage[UpdateDate]?.GetValue<string>();
+                var updateDate = ParseToUtc(updateDateAsString);
+                var deviceEventType = deviceMessageTypeAsInt.HasValue
+                    ? (DeviceEventType)deviceMessageTypeAsInt.Value
+                    : DeviceEventType.Confirmed;
+
+                // Http-specific fields
+                var httpRequest = eventMessage[HttpRequest]?.GetValue<string>();
+                var urlSuffix = eventMessage[UrlSuffix]?.GetValue<string>();
+                eventMessage.Remove(HttpRequest);
+                eventMessage.Remove(UrlSuffix);
+
+                _logger.LogInformation(
+                    "Received a message with HTTP request (Attempt {Attempt}/{MaxAttempts}): \"{Method}\", suffix \"{Suffix}\", payload:\n{Payload}",
+                    eventHeaderAttempt, _maxRetryAttempts, httpRequest, urlSuffix,
+                    eventMessage.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+                var pending = new PendingMessage(
+                    deliveryEvent.DeliveryTag,
+                    eventBody,
+                    eventHeaderAttempt,
+                    httpRequest,
+                    urlSuffix,
+                    updateDate);
+
+                switch (deviceEventType)
+                {
+                    case DeviceEventType.VolumeRenderChanged when _renderDebouncer != null:
+                        await _renderDebouncer!.EnqueueAsync(pending);
+                        _logger.LogInformation("Enqueued {Type} message at {UpdateDate:o} for debounce.",
+                            deviceEventType,
+                            updateDate);
+                        break;
+                    case DeviceEventType.VolumeCaptureChanged when _captureDebouncer != null:
+                        await _captureDebouncer!.EnqueueAsync(pending);
+                        _logger.LogInformation("Enqueued {Type} message at {UpdateDate:o} for debounce.",
+                            deviceEventType,
+                            updateDate);
+                        break;
+                    case DeviceEventType.Confirmed:
+                    case DeviceEventType.Discovered:
+                    case DeviceEventType.Detached:
+                    case DeviceEventType.DefaultRenderChanged:
+                    case DeviceEventType.DefaultCaptureChanged:
+                    default:
+                        await ProcessMessageAsync(pending, cancellationToken);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Unexpected exception during message processing. Moving message to failed queue.");
+                try
+                {
+                    if (_channel != null)
+                    {
+                        var body = deliveryEvent.Body.ToArray();
+                        var attempt2 = GetAttempt(deliveryEvent.BasicProperties.Headers);
+
+                        await PublishWithAttemptAsync(_failedQueueName, body, attempt2, cancellationToken);
+                        await _channel.BasicAckAsync(deliveryEvent.DeliveryTag, false, cancellationToken);
+                    }
+                }
+                catch (Exception republishEx)
+                {
+                    _logger.LogError(republishEx, "Failed to move message to failed queue.");
+                    if (_channel != null)
+                        await _channel.BasicNackAsync(deliveryEvent.DeliveryTag, false, false, cancellationToken);
+                }
+            }
+        };
+
+        await _channel!.BasicConsumeAsync(
+            _queueName,
+            false,
+            consumer,
+            cancellationToken);
+
+        _logger.LogInformation("Consumer started on channel.");
     }
 
     private static int GetAttempt(IDictionary<string, object?>? headers)
@@ -353,10 +432,7 @@ public partial class RabbitMqConsumerService : BackgroundService
         {
             _logger.LogWarning("Caught {ExceptionType} exception: {Message}.",
                 ex.GetType().Name, ex.Message);
-            if (_apiTarget == nameof(ApiBaseUrlSettings.Codespace))
-            {
-                await _codespaceAwaker.Awake(cancellationToken);
-            }
+            if (_apiTarget == nameof(ApiBaseUrlSettings.Codespace)) await _codespaceAwaker.Awake(cancellationToken);
 
             var reason = $"Exception: {ex.Message}";
             return new ProcessingResult(false, reason);
@@ -373,15 +449,15 @@ public partial class RabbitMqConsumerService : BackgroundService
         await base.StopAsync(cancellationToken);
     }
 
-    private readonly record struct ProcessingResult(bool Success, string? ErrorReason);
-
     private async Task ProcessMessageAsync(PendingMessage msg, CancellationToken ct)
     {
         _logger.LogInformation(
             "Processing message (Attempt {Attempt}/{MaxAttempts}): \"{Method}\", suffix \"{Suffix}\". UpdateDate: {UpdateDate:o}",
             msg.Attempt, _maxRetryAttempts, msg.HttpMethod, msg.UrlSuffix, msg.UpdateDate);
 
-        var result = await SendToApiAsync(msg.HttpMethod, msg.UrlSuffix, msg.Payload, ct);
+        var eventMessage = JsonNode.Parse(msg.Body)!.AsObject();
+
+        var result = await SendToApiAsync(msg.HttpMethod, msg.UrlSuffix, eventMessage, ct);
 
         if (result.Success)
         {
@@ -396,7 +472,7 @@ public partial class RabbitMqConsumerService : BackgroundService
                 await _channel!.BasicAckAsync(msg.DeliveryTag, false, ct);
                 _logger.LogWarning(
                     "Attempt {Attempt} failed. Scheduled retry attempt {NextAttempt} after {Delay}s. Reason: {Reason}",
-                    msg.Attempt, msg.Attempt + 1, (int)_retryDelay.TotalSeconds, result.ErrorReason);
+                    msg.Attempt, msg.Attempt + 1, _retryDelay.TotalSeconds, result.ErrorReason);
             }
             else
             {
@@ -412,11 +488,11 @@ public partial class RabbitMqConsumerService : BackgroundService
     {
         if (string.IsNullOrWhiteSpace(input)) return DateTime.MinValue;
         if (DateTimeOffset.TryParse(input, out var dto)) return dto.UtcDateTime;
-        if (DateTime.TryParse(input, out var dt))
-        {
-            return dt.Kind == DateTimeKind.Local ? dt.ToUniversalTime() : dt;
-        }
+        if (DateTime.TryParse(input, out var dt)) return dt.Kind == DateTimeKind.Local ? dt.ToUniversalTime() : dt;
 
         return DateTime.MinValue;
     }
+
+    private readonly record struct ProcessingResult(bool Success, string? ErrorReason);
+    private readonly record struct QueueInfo(string Name);
 }
