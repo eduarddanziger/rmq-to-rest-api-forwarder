@@ -136,8 +136,7 @@ public partial class RabbitMqConsumerService : BackgroundService
                 {
                     ["x-dead-letter-exchange"] = string.Empty,
                     ["x-dead-letter-routing-key"] = _queueName,
-                    ["x-message-ttl"] = (int)_retryDelay.TotalMilliseconds,
-                    ["x-expires"] = (int)_retryDelay.Add(TimeSpan.FromMinutes(5)).TotalMilliseconds
+                    ["x-message-ttl"] = (int)_retryDelay.TotalMilliseconds
                 };
                 await _channel.QueueDeclareAsync(
                     _retryQueueName,
@@ -149,8 +148,7 @@ public partial class RabbitMqConsumerService : BackgroundService
 
                 var failedArgs = new Dictionary<string, object>
                 {
-                    ["x-message-ttl"] = (int)TimeSpan.FromHours(24).TotalMilliseconds,
-                    ["x-expires"] = (int)TimeSpan.FromHours(25).TotalMilliseconds
+                    ["x-message-ttl"] = (int)TimeSpan.FromHours(24).TotalMilliseconds
                 };
                 await _channel.QueueDeclareAsync(
                     _failedQueueName,
