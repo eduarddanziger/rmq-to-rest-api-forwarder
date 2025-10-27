@@ -16,3 +16,5 @@ services:
       DOTNET_ENVIRONMENT: Docker
     depends_on:
       - rabbitmq
+    volumes:
+      - ./logs:/app/logs

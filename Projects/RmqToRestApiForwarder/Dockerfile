@@ -9,6 +9,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS publish
 WORKDIR /src
 
 # Copy entire repo to ensure custom MSBuild imports (msbuildLib) are available
+# .dockerignore causes not all the files are copied.
 COPY . .
 
 # Restore and publish
