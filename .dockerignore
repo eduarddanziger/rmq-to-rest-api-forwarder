@@ -1,0 +1,23 @@
+# Ignore Git files
+.git
+.gitignore
+
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# IDE and tooling
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Docker
+**/.dockerignore
+**/Dockerfile.*
+
+# OS files
+.DS_Store
+Thumbs.db

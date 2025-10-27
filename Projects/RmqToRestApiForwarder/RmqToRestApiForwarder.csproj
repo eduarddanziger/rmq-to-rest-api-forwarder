@@ -26,6 +26,11 @@
         </PackageReference>
     </ItemGroup>
 
+    <!-- Ensure all appsettings*.json are published (useful for Docker envs like DOTNET_ENVIRONMENT=Docker) -->
+    <ItemGroup>
+        <Content Include="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
     <!-- ReSharper disable UnknownTask -->
     <Target Name="ProcessReleaseNotes" Condition=" '$(_IsPublishing)' != 'true' " BeforeTargets="BeforeBuild">
         <PropertyGroup>
