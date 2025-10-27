@@ -1,6 +1,6 @@
-# Ignore Git files
-.git
-.gitignore
+# Don't iIgnore Git files, they need to generate version
+# .git
+# .gitignore
 
 # Build outputs
 bin/
@@ -21,3 +21,5 @@ obj/
 # OS files
 .DS_Store
 Thumbs.db
+
+**/GenerateCertificate.ps1
