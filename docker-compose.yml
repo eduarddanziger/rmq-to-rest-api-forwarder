@@ -2,11 +2,11 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management
     ports:
-      - "5673:5672"   # AMQP (5673 instead of default 5672 to avoid conflicts with the possible local RabbitMQ default installation)
-      - "15673:15672" # Management UI http://localhost:15673 (default is 15672)
+      - "5672:5672"
+      - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: forwarder
-      RABBITMQ_DEFAULT_PASS: forwarder
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
 
   forwarder:
     build:
