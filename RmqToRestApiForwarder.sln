@@ -7,13 +7,25 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
 		.github\workflows\build.yml = .github\workflows\build.yml
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RmqToRestApiForwarder", "Projects\RmqToRestApiForwarder\RmqToRestApiForwarder.csproj", "{D95C52E8-5631-4FDC-9DC6-A3C3C23A91DA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documents", "Documents", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+	ProjectSection(SolutionItems) = preProject
 		DOCKER.md = DOCKER.md
 		LICENSE = LICENSE
 		README.md = README.md
 		RmqToRestApiForwarder-Release-Notes.md = RmqToRestApiForwarder-Release-Notes.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RmqToRestApiForwarder", "Projects\RmqToRestApiForwarder\RmqToRestApiForwarder.csproj", "{D95C52E8-5631-4FDC-9DC6-A3C3C23A91DA}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{5B18478E-73DC-4782-9250-B32908625D1C}"
+	ProjectSection(SolutionItems) = preProject
+		.dockerignore = .dockerignore
+		docker-compose.yml = docker-compose.yml
+		DOCKER.md = DOCKER.md
+		Projects\RmqToRestApiForwarder\Dockerfile = Projects\RmqToRestApiForwarder\Dockerfile
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
