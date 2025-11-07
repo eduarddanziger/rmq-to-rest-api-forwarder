@@ -7,17 +7,17 @@
 
 ### 1.1 Windows Docker Extra light
 
-PowerShell (install WSL + Ubuntu)
+PowerShell: Install WSL + Ubuntu, if not yet done.
 ```powershell
 wsl --install -d Ubuntu
 ```
 
-Ubuntu (update packages)
+Ubuntu: Update packages
 ```sh
 sudo apt update && sudo apt upgrade -y
 ```
 
-Ubuntu (install Docker Engine + Compose v2)
+Ubuntu: install Docker Engine + Compose v2
 ```sh
 sudo apt install -y ca-certificates curl gnupg
 sudo install -m0755 -d /etc/apt/keyrings
@@ -27,7 +27,7 @@ sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-Ubuntu (add user to docker group, then re-login)
+Ubuntu: Add user to docker group, then re-login
 ```sh
 sudo usermod -aG docker $USER
 exit
@@ -35,12 +35,12 @@ exit
 # newgrp docker
 ```
 
-PowerShell (restart WSL after editing /etc/wsl.conf)
+PowerShell: Restart WSL after editing /etc/wsl.conf
 ```powershell
 wsl --shutdown
 ```
 
-Ubuntu (test Docker)
+Ubuntu: Test Docker
 ```sh
 docker version
 docker run hello-world
