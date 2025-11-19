@@ -1,3 +1,20 @@
+# Podman tests, do not work yet
+
+podman run -d --name rabbitmq `
+-p 5672:5672 -p 15672:15672 `
+-e RABBITMQ_DEFAULT_USER=guest `
+-e RABBITMQ_DEFAULT_PASS=guest `
+-e RABBITMQ_LOOPBACK_USERS=none `
+docker.io/library/rabbitmq:3.13-managementclear
+
+podman run -d --name forwarder `
+--env DOTNET_ENVIRONMENT=Docker `
+--env RabbitMQ__Service__Port=15672 `
+--env RabbitMQ__Service__QueueName=sdr_queue `
+--pod new:forwarder-pod01 `
+forwarder
+
+
 # Docker quickstart for RmqToRestApiForwarder
 
 Prerequisites
