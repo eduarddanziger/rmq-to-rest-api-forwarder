@@ -2,10 +2,32 @@
 
 ## 1) Build, run, and test locally from `docker-compose.yml`
 
-Prereqs
-- Podman Desktop or Podman CLI (v4+) on Windows (WSL2 backend) installed
+### Prereqs
+- Install a Podman Desktop or Podman CLI (v4+) on Windows (WSL2 backend) installed
+- Check if the /etc/resolv.conf file on wsl2 has valid DNS servers:
+```
+  PS> podman machine ssh cat /etc/resolv.conf
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+search localdomain
+```
+If not, create / override a resolv.conf:
+```
+  PS> podman machine ssh
+  # sudo tee /etc/wsl.conf >/dev/null <<EOF
+ [network]
+ generateResolvConf = false
+ EOF
 
-Steps
+  # sudo tee /etc/resolv.conf >/dev/null <<EOF
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+# (Add corporate DNS if required)
+search localdomain
+EOF
+```
+
+### Steps
 1. Ensure Podman machine is running:
    - `podman machine init --now` (first time only) or `podman machine start`
 2. Start containers from repo root (where `docker-compose.yml` lives):
@@ -22,7 +44,7 @@ Steps
    - Stop stack: `podman compose down`
    - Optional prune: `podman system prune -a`
 
-Notes
+### Notes
 - Port mappings (e.g. `8080:8080`) are accessed via `http://localhost:<host-port>`.
 - Environment variables, networks, and volumes behave similarly to Docker Compose.
 - If you previously installed the Python `podman-compose`, remove or ignore it to avoid confusion.
