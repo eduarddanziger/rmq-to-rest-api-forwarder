@@ -31,7 +31,7 @@ Notes
 
 Tag and push from dev machine
 1. Build (if not built by compose):
-   - `podman build -t rmq-to-rest-api-forwarder:latest -f Dockerfile .`
+   - `podman build -t rmq-to-rest-api-forwarder:latest -f Projects/RmqToRestApiForwarder/Dockerfile .`
 2. Log in to Docker Hub:
    - `podman login docker.io`
 3. Tag for your Docker Hub repo (replace `<user>` and `<tag>`):
