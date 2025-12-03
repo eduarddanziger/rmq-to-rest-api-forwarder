@@ -2,6 +2,7 @@ services:
   rabbitmq:
     image:
       rabbitmq:3.13-management
+    restart: unless-stopped
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -13,6 +14,7 @@ services:
   forwarder:
     image:
       danzigereduard/rmq-to-rest-api-forwarder:3.3.8-RC031-build01
+    restart: unless-stopped
     environment:
       DOTNET_ENVIRONMENT: Docker
     depends_on:
