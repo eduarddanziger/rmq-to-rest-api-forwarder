@@ -13,7 +13,7 @@ services:
 
   forwarder:
     image:
-      danzigereduard/rmq-to-rest-api-forwarder:3.3.8-RC031-build01
+      danzigereduard/rmq-to-rest-api-forwarder:$version$
     restart: unless-stopped
     environment:
       DOTNET_ENVIRONMENT: Docker
