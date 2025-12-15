@@ -15,7 +15,7 @@ COPY . .
 # Restore and publish
 RUN dotnet restore "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj"
 WORKDIR /src/Projects/RmqToRestApiForwarder
-RUN dotnet build "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release --no-restore
+RUN dotnet build "RmqToRestApiForwarder.csproj" -c Release --no-restore
 RUN dotnet publish "RmqToRestApiForwarder.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Final image
