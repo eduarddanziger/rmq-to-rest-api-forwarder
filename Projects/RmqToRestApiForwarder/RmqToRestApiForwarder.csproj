@@ -8,10 +8,14 @@
         <BaseDirectory>$(MSBuildThisFileDirectory)..\..\</BaseDirectory>
         <ArtifactsDirectory>$(BaseDirectory)artifacts\</ArtifactsDirectory>
         <ReleaseNotesFileName>RmqToRestApiForwarder-Release-Notes.md</ReleaseNotesFileName>
+        <DeployComposeSourceSubDir>deploy-via-docker\</DeployComposeSourceSubDir>
+        <DeployComposeFileName>docker-compose.yml</DeployComposeFileName>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
+
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.Common.props" />
     <Import Project="$(MSBuildThisFileDirectory)..\..\msbuildLib\Ed.CSharp.targets" />
+
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
         <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.8" />
@@ -27,12 +31,14 @@
     </ItemGroup>
 
     <!-- ReSharper disable UnknownTask -->
-    <Target Name="ProcessReleaseNotes" Condition=" '$(_IsPublishing)' != 'true' " BeforeTargets="BeforeBuild">
+    <Target Name="ProcessReleaseNotesAndCompose" Condition=" '$(_IsPublishing)' != 'true' " BeforeTargets="BeforeBuild">
         <PropertyGroup>
-            <ReleaseNotesTargetPathName>$(ArtifactsDirectory)$(ReleaseNotesFileName)</ReleaseNotesTargetPathName>
+          <ReleaseNotesTargetPathName>$(ArtifactsDirectory)$(ReleaseNotesFileName)</ReleaseNotesTargetPathName>
+          <DeployComposeTargetPathName>$(ArtifactsDirectory)$(DeployComposeFileName)</DeployComposeTargetPathName>
         </PropertyGroup>
         <Copy SourceFiles="$(BaseDirectory)$(ReleaseNotesFileName)" DestinationFolder="$(ArtifactsDirectory)" />
-        <FileUpdate Files="$(ReleaseNotesTargetPathName)" Regex="\$version\$" ReplacementText="$(Version)" />
+        <Copy SourceFiles="$(BaseDirectory)$(DeployComposeSourceSubDir)$(DeployComposeFileName)" DestinationFolder="$(ArtifactsDirectory)" />
+        <FileUpdate Files="$(ReleaseNotesTargetPathName);$(DeployComposeTargetPathName)" Regex="\$version\$" ReplacementText="$(Version)" />
         <Time Format="dd.MM.yyyy">
             <Output TaskParameter="FormattedTime" PropertyName="BuildDate" />
         </Time>
@@ -44,15 +50,12 @@
         <PropertyGroup>
             <PublishFullDirectory>$(ProjectDir)$(PublishDir)</PublishFullDirectory>
             <ZipFileNameSuffix Condition=" '$(Configuration)' == 'Debug' ">-Debug</ZipFileNameSuffix>
-            <ZipFileName>$(ArtifactsDirectory)$(AssemblyName)$(ZipFileNameSuffix)-$(Version).zip</ZipFileName>
+            <ZipFileName>$(ArtifactsDirectory)$(AssemblyName)-WindowsService$(ZipFileNameSuffix)-$(Version).zip</ZipFileName>
             <ZipStageDir>$(IntermediateOutputPath)zipstage\</ZipStageDir>
         </PropertyGroup>
         <Copy DestinationFolder="$(PublishFullDirectory)" SourceFiles="$(ArtifactsDirectory)$(ReleaseNotesFileName)" />
         <ItemGroup>
-            <FilesToZip Include="$(PublishFullDirectory)**\*.*" Exclude="$(PublishFullDirectory)**\*.pdb" />
-        </ItemGroup>
-        <ItemGroup>
-            <FilesToStage Include="$(PublishFullDirectory)**\*.*" Exclude="$(PublishFullDirectory)**\*.pdb" />
+            <FilesToStage Include="$(PublishFullDirectory)**\*.*" Exclude="$(PublishFullDirectory)**\*.pdb;$(PublishFullDirectory)**\appsettings.Docker.json" />
         </ItemGroup>
         <RemoveDir Directories="$(ZipStageDir)" />
         <MakeDir Directories="$(ZipStageDir)" />

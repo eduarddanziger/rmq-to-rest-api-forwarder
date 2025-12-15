@@ -193,7 +193,7 @@ public partial class RabbitMqConsumerService : BackgroundService
                     : maxConnectRetryDelay;
                 connectRetryIndex = Math.Min(connectRetryIndex + 1, connectRetryDelays.Length);
 
-                _logger.LogWarning(ex, "Connection/topology setup failed. Retrying in {DelaySeconds}s",
+                _logger.LogWarning(ex, "Connection/topology setup failed: {Exception}. Retrying in {DelaySeconds}s", ex.Message,
                     nextDelay.TotalSeconds);
                 await Task.Delay(nextDelay, cancellationToken);
             }
