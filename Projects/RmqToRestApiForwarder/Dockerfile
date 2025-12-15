@@ -13,7 +13,8 @@ WORKDIR /src
 COPY . .
 
 # Restore and publish
-RUN dotnet restore && dotnet build RmqToRestApiForwarder.sln -c Release --no-restore
+RUN dotnet restore "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj"
+RUN dotnet build RmqToRestApiForwarder.sln -c Release --no-restore
 WORKDIR /src/Projects/RmqToRestApiForwarder
 RUN dotnet publish "RmqToRestApiForwarder.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
