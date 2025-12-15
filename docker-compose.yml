@@ -1,0 +1,21 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_LOOPBACK_USERS: "none"  # allow 'guest' from non-localhost
+
+  forwarder:
+    build:
+      context: .
+      dockerfile: Projects/RmqToRestApiForwarder/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Docker
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./logs:/app/logs
