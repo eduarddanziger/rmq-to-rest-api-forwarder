@@ -13,7 +13,7 @@ WORKDIR /src
 COPY . .
 
 # Restore and publish
-RUN dotnet restore "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj"
+RUN msbuild /p:Configuration=Release /target:Rebuild -restore
 WORKDIR /src/Projects/RmqToRestApiForwarder
 RUN dotnet publish "RmqToRestApiForwarder.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
