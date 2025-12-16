@@ -36,18 +36,21 @@
             <Using Namespace="System" />
             <Using Namespace="System.IO" />
             <Using Namespace="System.Text.RegularExpressions" />
-            <Code Type="Fragment" Language="cs"><![CDATA[
-                foreach (var item in Files)
-                {
-                    var path = item.ItemSpec;
-                    if (!File.Exists(path))
-                        continue;
-                    var text = File.ReadAllText(path);
-                    var updated = Regex.Replace(text, Pattern, Replacement);
-                    if (!string.Equals(text, updated, StringComparison.Ordinal))
-                        File.WriteAllText(path, updated);
-                }
-                return true;
+            <Code Type="Method" Language="cs"><![CDATA[
+public override bool Execute()
+{
+    foreach (var item in Files)
+    {
+        var path = item.ItemSpec;
+        if (!File.Exists(path))
+            continue;
+        var text = File.ReadAllText(path);
+        var updated = Regex.Replace(text, Pattern, Replacement);
+        if (!string.Equals(text, updated, StringComparison.Ordinal))
+            File.WriteAllText(path, updated);
+    }
+    return true;
+}
             ]]></Code>
         </Task>
     </UsingTask>
@@ -62,24 +65,27 @@
             <Using Namespace="System" />
             <Using Namespace="System.IO" />
             <Using Namespace="System.IO.Compression" />
-            <Code Type="Fragment" Language="cs"><![CDATA[
-                try
-                {
-                    if (File.Exists(DestinationFile) && Overwrite)
-                    {
-                        File.Delete(DestinationFile);
-                    }
-                    var destDir = Path.GetDirectoryName(DestinationFile);
-                    if (!string.IsNullOrEmpty(destDir))
-                        Directory.CreateDirectory(destDir);
-                    ZipFile.CreateFromDirectory(SourceDirectory, DestinationFile, CompressionLevel.Optimal, includeBaseDirectory: false);
-                }
-                catch (Exception ex)
-                {
-                    Log.LogErrorFromException(ex);
-                    return false;
-                }
-                return true;
+            <Code Type="Method" Language="cs"><![CDATA[
+public override bool Execute()
+{
+    try
+    {
+        if (File.Exists(DestinationFile) && Overwrite)
+        {
+            File.Delete(DestinationFile);
+        }
+        var destDir = Path.GetDirectoryName(DestinationFile);
+        if (!string.IsNullOrEmpty(destDir))
+            Directory.CreateDirectory(destDir);
+        ZipFile.CreateFromDirectory(SourceDirectory, DestinationFile, CompressionLevel.Optimal, includeBaseDirectory: false);
+        return true;
+    }
+    catch (Exception ex)
+    {
+        Log.LogErrorFromException(ex);
+        return false;
+    }
+}
             ]]></Code>
         </Task>
     </UsingTask>
