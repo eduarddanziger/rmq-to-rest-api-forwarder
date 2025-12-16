@@ -24,18 +24,15 @@
         <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
         <PackageReference Include="System.IO.Hashing" Version="9.0.9" />
         <PackageReference Include="System.Text.Json" Version="9.0.8" />
-        <!-- Removed legacy MSBuildTasks to allow dotnet restore cross-platform -->
     </ItemGroup>
 
-    <!-- Inline tasks replacing MSBuildTasks: FileUpdate/Time/ZipDirectory -->
-    <UsingTask TaskName="RegexReplaceInFile" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <UsingTask TaskName="RegexReplaceInFile" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
         <ParameterGroup>
             <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
             <Pattern ParameterType="System.String" Required="true" />
             <Replacement ParameterType="System.String" Required="true" />
         </ParameterGroup>
         <Task>
-            <Reference Include="System.Text.RegularExpressions" />
             <Using Namespace="System" />
             <Using Namespace="System.IO" />
             <Using Namespace="System.Text.RegularExpressions" />
@@ -55,14 +52,13 @@
         </Task>
     </UsingTask>
 
-    <UsingTask TaskName="ZipDirectoryInline" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <UsingTask TaskName="ZipDirectoryInline" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
         <ParameterGroup>
             <SourceDirectory ParameterType="System.String" Required="true" />
             <DestinationFile ParameterType="System.String" Required="true" />
             <Overwrite ParameterType="System.Boolean" Required="false" />
         </ParameterGroup>
         <Task>
-            <Reference Include="System.IO.Compression" />
             <Using Namespace="System" />
             <Using Namespace="System.IO" />
             <Using Namespace="System.IO.Compression" />
@@ -93,7 +89,6 @@
         <PropertyGroup>
           <ReleaseNotesTargetPathName>$(ArtifactsDirectory)$(ReleaseNotesFileName)</ReleaseNotesTargetPathName>
           <DeployComposeTargetPathName>$(ArtifactsDirectory)$(DeployComposeFileName)</DeployComposeTargetPathName>
-          <!-- Replace MSBuildTasks Time with property function -->
           <BuildDate>$([System.DateTime]::UtcNow.ToString('dd.MM.yyyy'))</BuildDate>
         </PropertyGroup>
         <Copy SourceFiles="$(BaseDirectory)$(ReleaseNotesFileName)" DestinationFolder="$(ArtifactsDirectory)" />
@@ -120,7 +115,6 @@
         <MakeDir Directories="$(ZipStageDir)" />
         <Copy SourceFiles="@(FilesToStage)" DestinationFiles="@(FilesToStage->'$(ZipStageDir)%(RecursiveDir)%(Filename)%(Extension)')" />
         <Delete Files="$(ZipFileName)" ContinueOnError="true" />
-        <!-- Replace MSBuildTasks ZipDirectory with inline cross-platform impl -->
         <ZipDirectoryInline SourceDirectory="$(ZipStageDir)" DestinationFile="$(ZipFileName)" Overwrite="true" />
     </Target>
     <!-- ReSharper restore UnknownTask -->
