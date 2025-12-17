@@ -77,7 +77,7 @@ jobs:
     - name: Build with MSBuild
       run: |
         msbuild /p:Configuration=Release /target:Rebuild -restore
-        dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release -p:PublishProfile=WinX64 -v:detailed
+        # dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release -p:PublishProfile=WinX64 -v:detailed
 
     - name: Upload entire artifacts directory
       uses: actions/upload-artifact@v4
