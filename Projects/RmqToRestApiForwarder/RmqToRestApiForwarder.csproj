@@ -24,32 +24,92 @@
         <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
         <PackageReference Include="System.IO.Hashing" Version="9.0.9" />
         <PackageReference Include="System.Text.Json" Version="9.0.8" />
-        <PackageReference Include="MSBuildTasks" Version="1.5.0.235">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
     </ItemGroup>
+
+    <UsingTask TaskName="RegexReplaceInFile" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+            <Pattern ParameterType="System.String" Required="true" />
+            <Replacement ParameterType="System.String" Required="true" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System" />
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.Text.RegularExpressions" />
+            <Code Type="Method" Language="cs"><![CDATA[
+public override bool Execute()
+{
+    foreach (var item in Files)
+    {
+        var path = item.ItemSpec;
+        if (!File.Exists(path))
+            continue;
+        var text = File.ReadAllText(path);
+        var updated = Regex.Replace(text, Pattern, Replacement);
+        if (!string.Equals(text, updated, StringComparison.Ordinal))
+            File.WriteAllText(path, updated);
+    }
+    return true;
+}
+            ]]></Code>
+        </Task>
+    </UsingTask>
+
+    <UsingTask TaskName="ZipDirectoryInline" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <SourceDirectory ParameterType="System.String" Required="true" />
+            <DestinationFile ParameterType="System.String" Required="true" />
+            <Overwrite ParameterType="System.Boolean" Required="false" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System" />
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.IO.Compression" />
+            <Code Type="Method" Language="cs"><![CDATA[
+public override bool Execute()
+{
+    try
+    {
+        if (File.Exists(DestinationFile) && Overwrite)
+        {
+            File.Delete(DestinationFile);
+        }
+        var destDir = Path.GetDirectoryName(DestinationFile);
+        if (!string.IsNullOrEmpty(destDir))
+            Directory.CreateDirectory(destDir);
+        ZipFile.CreateFromDirectory(SourceDirectory, DestinationFile, CompressionLevel.Optimal, includeBaseDirectory: false);
+        return true;
+    }
+    catch (Exception ex)
+    {
+        Log.LogErrorFromException(ex);
+        return false;
+    }
+}
+            ]]></Code>
+        </Task>
+    </UsingTask>
 
     <!-- ReSharper disable UnknownTask -->
     <Target Name="ProcessReleaseNotesAndCompose" Condition=" '$(_IsPublishing)' != 'true' " BeforeTargets="BeforeBuild">
         <PropertyGroup>
           <ReleaseNotesTargetPathName>$(ArtifactsDirectory)$(ReleaseNotesFileName)</ReleaseNotesTargetPathName>
           <DeployComposeTargetPathName>$(ArtifactsDirectory)$(DeployComposeFileName)</DeployComposeTargetPathName>
+          <BuildDate>$([System.DateTime]::UtcNow.ToString('dd.MM.yyyy'))</BuildDate>
         </PropertyGroup>
         <Copy SourceFiles="$(BaseDirectory)$(ReleaseNotesFileName)" DestinationFolder="$(ArtifactsDirectory)" />
         <Copy SourceFiles="$(BaseDirectory)$(DeployComposeSourceSubDir)$(DeployComposeFileName)" DestinationFolder="$(ArtifactsDirectory)" />
-        <FileUpdate Files="$(ReleaseNotesTargetPathName);$(DeployComposeTargetPathName)" Regex="\$version\$" ReplacementText="$(Version)" />
-        <Time Format="dd.MM.yyyy">
-            <Output TaskParameter="FormattedTime" PropertyName="BuildDate" />
-        </Time>
-        <FileUpdate Files="$(ReleaseNotesTargetPathName)" Regex="\$date\$" ReplacementText="$(BuildDate)" />
+        <!-- Replace $version$ in both files -->
+        <RegexReplaceInFile Files="$(ReleaseNotesTargetPathName);$(DeployComposeTargetPathName)" Pattern="\$version\$" Replacement="$(Version)" />
+        <!-- Replace $date$ in release notes only -->
+        <RegexReplaceInFile Files="$(ReleaseNotesTargetPathName)" Pattern="\$date\$" Replacement="$(BuildDate)" />
     </Target>
 
     <Target Name="ZipOutputPath" AfterTargets="SignAfterPublish">
         <Message Text="Zip: PublishFullDirectory: $(PublishFullDirectory)" importance="high" />
         <PropertyGroup>
             <PublishFullDirectory>$(ProjectDir)$(PublishDir)</PublishFullDirectory>
-            <ZipFileNameSuffix Condition=" '$(Configuration)' == 'Debug' ">-Debug</ZipFileNameSuffix>
+            <ZipFileNameSuffix Condition=" '$(Configuration)' == 'Debug'">-Debug</ZipFileNameSuffix>
             <ZipFileName>$(ArtifactsDirectory)$(AssemblyName)-WindowsService$(ZipFileNameSuffix)-$(Version).zip</ZipFileName>
             <ZipStageDir>$(IntermediateOutputPath)zipstage\</ZipStageDir>
         </PropertyGroup>
@@ -61,7 +121,7 @@
         <MakeDir Directories="$(ZipStageDir)" />
         <Copy SourceFiles="@(FilesToStage)" DestinationFiles="@(FilesToStage->'$(ZipStageDir)%(RecursiveDir)%(Filename)%(Extension)')" />
         <Delete Files="$(ZipFileName)" ContinueOnError="true" />
-        <ZipDirectory SourceDirectory="$(ZipStageDir)" DestinationFile="$(ZipFileName)" Overwrite="true" />
+        <ZipDirectoryInline SourceDirectory="$(ZipStageDir)" DestinationFile="$(ZipFileName)" Overwrite="true" />
     </Target>
     <!-- ReSharper restore UnknownTask -->
 </Project>
