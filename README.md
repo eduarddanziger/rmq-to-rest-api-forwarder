@@ -5,10 +5,10 @@ A helper message-forwarding service for the Sound Windows Agent, see [SoundWindA
 ## Overview
 
 The Sound Windows Agent queues HTTP requests to RabbitMQ.
-The **RmqToRestApiForwarder** Windows Service consumes those messages and
+The **RmqToRestApiForwarder** service consumes those messages and
 forwards the JSON payloads to a configured REST API endpoint.
 
-- Runs as a Windows Service on the Sound Windows Agent host machine
+- Runs as a Docker container on the Sound Windows Agent host machine
 - Reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
 - Logging is handled by NLog (log files configured to be written
   to C:\ProgramData\<processname> by default, see appsettings.json)
@@ -21,30 +21,17 @@ forwards the JSON payloads to a configured REST API endpoint.
 
 ## Usage
 
-1. Install RabbitMQ locally, e.g., via Chocolatey:
-```powershell
-choco install rabbitmq
-```
+1. Install Docker Desktop on the Sound Windows Agent Windows machine:
+
 2. Download and unzip the latest rollout of RabbitMQ To REST API Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
 
-3. Configure settings in appsettings.json:
-   - RabbitMQ::Service: UserName, Password, keep the default HostName, Port and QueueName for standard local installation
-   - The RabbitMQ::Service::NetworkRecoveryIntervalInSeconds and the rest of options like RabbitMQ::MessageDelivery are mostly appropriate
-   - ApiBaseUrl::Target can be Codespace (default) or Azure, depending onm the REST API backend location you want to use
-
-4. Use it as a Windows Service or, alternatively, run it from a command prompt.
-
-    If you want a Windows Service, open an elevated command or power shell prompt (Run as Administrator)
+3. Bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine via docker-compose:
+   Open a PowerShell prompt in the unzipped folder and run:
   ```powershell
-  ## Register as a Windows Service and start it:
-  sc create RmqToRestApiForwarder binPath="<your folder>\RmqToRestApiForwarder.exe" start=auto
-  sc start RmqToRestApiForwarder
-
-  ## Stop it and unregister:
-  sc stop RmqToRestApiForwarder
-  sc delete RmqToRestApiForwarder
+  docker-compose up -d
   ```
-5. You can redefined the ApiBaseUrl:Target (see appsettings.json, default is Azure) via command line.
+
+4. You can redefined the ApiBaseUrl:Target (see appsettings.json, default is Azure) via command line.
    The possible values are Azure, Local, Codespace, e.g.:
   ```powershell
   RmqToRestApiForwarder.exe --ApiBaseUrl:Target=Codespace
@@ -56,6 +43,7 @@ choco install rabbitmq
 2. Restore packages and build the solution:
 
 ```powershell
+# Using dotnet CLI
 # Using dotnet CLI
 dotnet restore RmqToRestApiForwarder.sln
 dotnet build RmqToRestApiForwarder.sln -c Release
@@ -69,6 +57,11 @@ dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c 
 ```
 
 4. Run: see previous section "Usage", parts 4.
+
+## Changelog
+
+- 2025-12-18: Switched MSBuild inline tasks to RoslynCodeTaskFactory for cross-platform builds (Windows/Linux).
+- 2025-12-18: Replaced legacy tasks with inline regex and zip implementations; fixed warnings and improved Docker publish flow.
 
 ## License
 
