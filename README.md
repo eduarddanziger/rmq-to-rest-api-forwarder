@@ -1,21 +1,27 @@
-# RabbitMQ To REST API Forwarder
+# RabbitMQ-To-REST-API-Forwarder
 
-A helper message-forwarding service for the Sound Windows Agent, see [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/).
+A message-forwarding helper service for the Sound Windows Agent; see [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/).
 
-## Overview
+## Motivation
 
-The Sound Windows Agent queues HTTP requests to RabbitMQ.
-The **RmqToRestApiForwarder** service consumes those messages and
-forwards the JSON payloads to a configured REST API endpoint.
+Its purpose is to fetch HTTP request messages from RabbitMQ and forward them to a configured REST API endpoint.
 
-- Runs as a Docker container on the Sound Windows Agent host machine
+## Fuctionality
+
+- RabbitMQ-To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
 - Reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
 - Logging is handled by NLog (log files configured to be written
   to C:\ProgramData\<processname> by default, see appsettings.json)
+- Debouncing of frequent volume-change events.The respective time window
+  is configurable via `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds.
+- Reliable delivery with delayed retries (via TTL and dead-lettering).
+  After the retry max is reached, the message is routed to a failed queue.
+  See settings: `RabbitMqMessageDeliverySettings:RetryDelayInSeconds`, `MaxRetryAttempts`.
+
 
 ## Technologies Used
 
-- **.NET 8 Worker Service Template** builds Windows Service.
+- **.NET 8 Generic Host Template** builds Windows Console App or Windows Service.
 - **RabbitMQ.Client** library for interacting with RabbitMQ.
 - **NLog** logging library for .NET.
 
@@ -23,18 +29,12 @@ forwards the JSON payloads to a configured REST API endpoint.
 
 1. Install Docker Desktop on the Sound Windows Agent Windows machine:
 
-2. Download and unzip the latest rollout of RabbitMQ To REST API Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
+2. Download and unzip the latest rollout of RabbitMQ-To-REST-API-Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
 
-3. Bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine via docker-compose:
+3. Use docker-compose to bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine:
    Open a PowerShell prompt in the unzipped folder and run:
   ```powershell
   docker-compose up -d
-  ```
-
-4. You can redefined the ApiBaseUrl:Target (see appsettings.json, default is Azure) via command line.
-   The possible values are Azure, Local, Codespace, e.g.:
-  ```powershell
-  RmqToRestApiForwarder.exe --ApiBaseUrl:Target=Codespace
   ```
 
 ## Developer Environment, How to Build and Run:
@@ -43,7 +43,6 @@ forwards the JSON payloads to a configured REST API endpoint.
 2. Restore packages and build the solution:
 
 ```powershell
-# Using dotnet CLI
 # Using dotnet CLI
 dotnet restore RmqToRestApiForwarder.sln
 dotnet build RmqToRestApiForwarder.sln -c Release
