@@ -1,6 +1,6 @@
 # RabbitMQ-To-REST-API-Forwarder
 
-A message-forwarding helper service for the Sound Windows Agent; see [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/).
+A event-forwarding helper service for the Sound Windows Agent; see [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/).
 
 ## Motivation
 
@@ -8,28 +8,35 @@ Its purpose is to fetch HTTP request messages from RabbitMQ and forward them to 
 
 ## Fuctionality
 
+- (Background) The Sound Windows Agent transforms its sound events into HTTP request
+  messages and enquies them into a local RabbitMQ message broker
 - RabbitMQ-To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
-- Reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
-- Logging is handled by NLog (log files configured to be written
-  to C:\ProgramData\<processname> by default, see appsettings.json)
-- Debouncing of frequent volume-change events.The respective time window
-  is configurable via `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds.
-- Reliable delivery with delayed retries (via TTL and dead-lettering).
-  After the retry max is reached, the message is routed to a failed queue.
-  See settings: `RabbitMqMessageDeliverySettings:RetryDelayInSeconds`, `MaxRetryAttempts`.
+- It reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
+- It applies debouncing of frequent volume-change PUT-requests.
+  * The respective time window is configurable via `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds`.
+- It guarantees reliable delivery with delayed retries
+  * It uses retry and failed queues (the message is routed to a failed queue after the retry max is reached),
+  see settings: `RabbitMqMessageDeliverySettings:RetryDelayInSeconds`, `MaxRetryAttempts`.
 
 
 ## Technologies Used
 
-- **.NET 8 Generic Host Template** builds Windows Console App or Windows Service.
-- **RabbitMQ.Client** library for interacting with RabbitMQ.
-- **NLog** logging library for .NET.
+- RabbitMQ-To-REST-API-Forwarder:
+  - **.NET 8 Generic Host Template** builds Windows Console App or Windows Service.
+  - **RabbitMQ.Client** library for interacting with RabbitMQ.
+  - **NLog** logging library for .NET.
+  - Distributed as a Docker container, see `docker-compose.yml`. The respactive images are built via GitHub Actions CI/CD pipeline
+    and regularary published to GitHub Container Registry.
+- RabbitMQ:
+  - Distributed as a Docker container, see an Official RabbitMQ Docker image and `docker-compose.yml`.
 
 ## Usage
 
 1. Install Docker Desktop on the Sound Windows Agent Windows machine:
 
 2. Download and unzip the latest rollout of RabbitMQ-To-REST-API-Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
+
+3. Create a `logs` folder in the unzipped folder
 
 3. Use docker-compose to bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine:
    Open a PowerShell prompt in the unzipped folder and run:
