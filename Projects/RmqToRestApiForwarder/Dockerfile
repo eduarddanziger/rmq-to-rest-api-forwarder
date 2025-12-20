@@ -4,7 +4,6 @@
 FROM mcr.microsoft.com/dotnet/runtime:8.0 AS base
 WORKDIR /app
 
-# Build and publish
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS publish
 WORKDIR /src
 
@@ -12,9 +11,8 @@ WORKDIR /src
 # .dockerignore causes not all the files are copied.
 COPY . .
 
-# Restore and publish
-RUN dotnet restore "RmqToRestApiForwarder.sln"
-RUN dotnet build "RmqToRestApiForwarder.sln" -c Release --no-restore
+# Build and publish
+RUN dotnet build "RmqToRestApiForwarder.sln" -c Release
 RUN dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Final image

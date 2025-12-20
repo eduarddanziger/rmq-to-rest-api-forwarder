@@ -125,7 +125,7 @@ jobs:
 
   publish:
     if: github.ref != 'refs/pull/develop'
-    needs: build
+    needs: [build, dockerhub]
     runs-on: ubuntu-latest
 
     steps:
