@@ -38,7 +38,7 @@ Its purpose is to fetch HTTP request messages from RabbitMQ and forward them to 
 
 3. Create a `logs` folder in the unzipped folder
 
-3. Use docker-compose to bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine:
+4. Use docker-compose to bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine:
    Open a PowerShell prompt in the unzipped folder and run:
   ```powershell
   docker-compose up -d
