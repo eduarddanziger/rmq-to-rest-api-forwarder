@@ -58,9 +58,13 @@ dotnet build RmqToRestApiForwarder.sln -c Release
 dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release -p:PublishProfile=WinX64
 ```
 
+4. Developer Manual
+
+For deeper developer explanations (Podman vs Docker), see: https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/blob/HEAD/PODMAN-vs-DOCKER.md
+
 ## Changelog
 
-- 2025-12-20: Readme improvements and clarifications.
+- 2025-12-21: Readme improvements and clarifications.
 - 2025-12-18: Switched MSBuild inline tasks to RoslynCodeTaskFactory for cross-platform builds (Windows/Linux).
 - 2025-12-18: Replaced legacy tasks with inline regex and zip implementations; fixed warnings and improved Docker publish flow.
 
