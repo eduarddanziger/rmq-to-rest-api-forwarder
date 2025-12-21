@@ -1,17 +1,22 @@
 # Podman (Windows) quick guide
 
+## Podman is a container engine alternative to Docker.
+- Daemonless and rootless
+- Smaller footprint (useful in resource-constrained dev environments)
+- Less known than Docker
+
 ## 1) Build, run, and test locally from `docker-compose.yml`
 
 ### Prereqs
-- Install a Podman Desktop or Podman CLI (v4+) on Windows (WSL2 backend) installed
-- Check if the /etc/resolv.conf file on wsl2 has valid DNS servers:
+- Install Podman Desktop or Podman CLI (v4+) on Windows (WSL2 backend)
+- Check if the `/etc/resolv.conf` file on WSL2 has valid DNS servers:
 ```
   PS> podman machine ssh cat /etc/resolv.conf
 nameserver 1.1.1.1
 nameserver 8.8.8.8
 search localdomain
 ```
-If not, create / override a resolv.conf:
+If not, create/override a resolv.conf:
 ```
   PS> podman machine ssh
   # sudo tee /etc/wsl.conf >/dev/null <<EOF
@@ -33,19 +38,19 @@ EOF
 2. Start containers from repo root (where `docker-compose.yml` lives):
    - Build images: `podman compose build`
    - Start stack: `podman compose up -d`
-3. Tests
+3. Test
    - List containers: `podman ps` or `podman compose ps`
    - Logs:
        - `podman logs -f rmq-to-rest-api-forwarder-forwarder-1`
        - `podman logs -f rmq-to-rest-api-forwarder-rabbitmq-1`
-   - Check RabbitMQ  `http://localhost:15672/`:
-   1 channel and 3 Queues must exist.
+   - Check RabbitMQ at `http://localhost:15672/`:
+     1 channel and 3 queues must exist.
 4. Stop/clean:
    - Stop stack: `podman compose down`
    - Optional prune: `podman system prune -a`
 
 ### Notes
-- Port mappings (e.g. `8080:8080`) are accessed via `http://localhost:<host-port>`.
+- Port mappings (e.g., `8080:8080`) are accessed via `http://localhost:<host-port>`.
 - Environment variables, networks, and volumes behave similarly to Docker Compose.
 - If you previously installed the Python `podman-compose`, remove or ignore it to avoid confusion.
 
@@ -73,6 +78,6 @@ Use on non-dev Windows machine (Docker Desktop)
   - `docker ps`, `docker logs -f rmq-forwarder`, curl `http://localhost:8080/health`
 
 Tips
-- Use immutable tags (version, commit SHA) to avoid confusion with `latest`.
+- Use immutable tags (version or commit SHA) to avoid confusion with `latest`.
 - For private repos: `docker login` on target machine.
 - Images pushed by Podman are OCI-compliant and run unmodified on Docker Desktop.
