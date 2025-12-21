@@ -23,9 +23,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{5B1847
 	ProjectSection(SolutionItems) = preProject
 		.dockerignore = .dockerignore
 		docker-compose.yml = docker-compose.yml
-		DOCKER.md = DOCKER.md
 		Projects\RmqToRestApiForwarder\Dockerfile = Projects\RmqToRestApiForwarder\Dockerfile
-		PODMAN.md = PODMAN.md
+		PODMAN-vs-DSOCKER.md = PODMAN-vs-DSOCKER.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deploy", "Deploy", "{3DADC45F-674E-4AA5-AB7D-F1F69AB72C28}"
