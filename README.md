@@ -1,6 +1,6 @@
 # RabbitMQ-To-REST-API-Forwarder
 
-A event-forwarding helper service for the Sound Windows Agent; see [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/).
+A event-forwarding helper service for the Sound Windows Agent; see [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/). Distrubuted via Docker.
 
 ## Motivation
 
