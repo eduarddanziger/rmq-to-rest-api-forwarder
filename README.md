@@ -1,6 +1,6 @@
 # RabbitMQ-To-REST-API-Forwarder
 
-A event-forwarding helper service for the Sound Windows Agent; see [SoundWindAgent](https://github.com/eduarddanziger/SoundWindAgent/).
+A event-forwarding helper service for the Sound Windows Agent; see [SoundWinAgent](https://github.com/eduarddanziger/SoundWinAgent/).
 ## Motivation
 
 RabbitMQ-To-REST-API-Forwarder's purpose is to fetch HTTP request messages from RabbitMQ and forward them to a configured REST API endpoint.
