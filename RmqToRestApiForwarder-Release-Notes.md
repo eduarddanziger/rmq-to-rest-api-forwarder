@@ -1,13 +1,19 @@
 ﻿RambbitMQ To REST API Forwarder - Release Notes 
 =====================================
 ~~~
-Copyright 2025 by Eduard Danziger
+Copyright 2025 - 2026 by Eduard Danziger
 ~~~
 
 $version$
 --------
 ~~~
 Released on $date$
+~~~
+
+3.4.0
+--------
+~~~
+Released on 18.12.2025
 ~~~
 
 ## Change

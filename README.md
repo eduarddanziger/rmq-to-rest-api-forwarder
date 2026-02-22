@@ -1,13 +1,33 @@
 # RabbitMQ-To-REST-API-Forwarder
 
-A event-forwarding helper service for the Sound Windows Agent; see [SoundWinAgent](https://github.com/eduarddanziger/SoundWinAgent/).
+A event-forwarding helper service for the Windows Sound Scanner; see [WinSoundScanner](https://github.com/collect-sound-devices/win-sound-scanner-go).
+
 ## Motivation
 
-RabbitMQ-To-REST-API-Forwarder's purpose is to fetch HTTP request messages from RabbitMQ and forward them to a configured REST API endpoint.
+RabbitMQ-To-REST-API-Forwarder's purpose is to fetch HTTP request messages from RabbitMQ and forward
+them to a configured REST API endpoint.
 
-## Fuctionality
+## Event Forwarding Pattern
 
-- (Background) The Sound Windows Agent transforms its sound events into HTTP request
+RabbitMQ-To-REST-API-Forwarder implements a message forwarding pattern that includes debouncing
+for frequent volume change events and reliable delivery with retry and failed queues.
+
+```mermaid
+flowchart TD
+    A[["Windows Sound Scanner<br>(WinSoundScanner)"]] ==>|"enqueue HTTP messages"| B["RabbitMQ"]
+    B ==>|"consume"| C["RabbitMqConsumerService<br>(BackgroundService)"]
+    C ==>|"debounce (volume events)"| D["DebounceWorker"]
+    C ==>|"direct forward<br>(other events)"| E["SendToApiAsync"]
+    D ==>|"winner message"| E
+    E ==>|"POST / PUT"| F[["REST API Endpoint"]]
+    E -->|"on failure"| G["Retry Queue<br>(.retry)"]
+    G -->|"TTL expires → re-deliver"| B
+    E -->|"max retries exceeded"| H["Failed Queue<br>(.failed)"]
+```
+
+## Functions
+
+- (Background) The Windows Sound Scanner transforms its sound events into HTTP request
   messages and enquies them into a local RabbitMQ message broker
 - RabbitMQ-To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
 - It reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
