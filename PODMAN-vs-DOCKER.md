@@ -6,7 +6,7 @@
 - Podman is less known than Docker
 - Docker is often preinstalled on cloud CI/CD environments like GitHub Actions Containers
 
-## 1) Podman: Build, run, and test locally from `docker-compose.yml`
+## 1. Podman: Build, run, and test locally from `docker-compose.yml`
 
 ### Prereqs
 - Install Podman Desktop or Podman CLI (v4+) on Windows (WSL2 backend)
@@ -20,7 +20,7 @@
 - If not, create/override a resolv.conf:
 ```
   PS> podman machine ssh
-  # sudo tee /etc/wsl.conf >/dev/null <<EOF
+ # sudo tee /etc/wsl.conf >/dev/null <<EOF
  [network]
  generateResolvConf = false
  EOF
@@ -42,14 +42,14 @@ EOF
 1. ***Build*** images and ***start*** containers from repo root (where `docker-compose.yml` lives):
    - Build images: `podman compose build`
    - Start stack: `podman compose up -d`
-3. ***Test***
+2. ***Test***
    - List containers: `podman ps` or `podman compose ps`
    - Logs:
        - `podman logs -f rmq-to-rest-api-forwarder-forwarder-1`
        - `podman logs -f rmq-to-rest-api-forwarder-rabbitmq-1`
    - Check RabbitMQ at `http://localhost:15672/`:
      1 channel and 3 queues must exist.
-4. ***Stop/clean***:
+3. ***Stop/clean***:
    - Stop stack: `podman compose down`
    - Optional prune: `podman system prune -a`
 
@@ -58,7 +58,7 @@ EOF
 - Environment variables, networks, and volumes behave similarly to Docker Compose.
 - If you previously installed the Python `podman-compose`, remove or ignore it to avoid confusion.
 
-## 2) Publish to Docker Hub with Podman and test on Docker Desktop
+## 2. Publish to Docker Hub with Podman and test on Docker Desktop
 
 ### Tag and push from dev machine
 1. Build (if not built by compose):
@@ -86,7 +86,7 @@ EOF
 - For private repos: `docker login` on target machine.
 - Images pushed by Podman are OCI-compliant and run unmodified on Docker Desktop.
 
-## 3) Docker: build, run, and test locally from `docker-compose.yml`
+## 3. Docker: build, run, and test locally from `docker-compose.yml`
 
 ### Prereqs
 - Docker Desktop (Windows/macOS) or Docker Engine (Linux) with Compose v2
@@ -109,7 +109,7 @@ EOF
 ### Stop/cleanup
 - docker compose down
 
-## 4) Podman: Running containers with ad hoc configuration
+## 4. Podman: Running containers with ad hoc configuration
 
 ### Prereqs
 - Step 1, 2 or 3 from above completed
@@ -121,7 +121,7 @@ podman run -d --name rabbitmq `
   -e RABBITMQ_DEFAULT_USER=guest `
   -e RABBITMQ_DEFAULT_PASS=guest `
   -e RABBITMQ_LOOPBACK_USERS=none `
-  docker.io/library/rabbitmq:3.13-managementclear
+  docker.io/library/rabbitmq:3.13-management
 ```
 
 ### Forwarder
@@ -130,6 +130,6 @@ podman run -d --name forwarder `
   -e DOTNET_ENVIRONMENT=Docker `
   -e RabbitMQ__Service__Port=15672 `
   -e RabbitMQ__Service__QueueName=sdr_queue `
-  --pod new:forwarder-pod01 `
+  --pod forwarder-pod01 `
   forwarder
 ```
