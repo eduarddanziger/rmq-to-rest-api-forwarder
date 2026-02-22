@@ -41,8 +41,8 @@ jobs:
         Write-Output "LATEST_TAG: $LATEST_TAG"
 
         # Extract version number from the tag (e.g., Release-1.0.1 -> 1.0.1)
-        $VERSION_NUMBER = $LATEST_TAG -replace '^Release-', ''
-        Write-Output "VERSION_NUMBER: $VERSION_NUMBER"
+        $VERSIONNUMBER = $LATEST_TAG -replace '^Release-', ''
+        Write-Output "VERSIONNUMBER: $VERSIONNUMBER"
 
         # Get the distance since the latest tag
         $DISTANCE = git rev-list --count "$LATEST_TAG..HEAD"
@@ -50,18 +50,15 @@ jobs:
 
         # Append -SP<distance> if distance is greater than 0
         if ($DISTANCE -gt 0) {
-            # Increment the third number
-            $versionParts = $VERSION_NUMBER -split '\.'
-            $versionParts[2] = [int]$versionParts[2] + 1
-            $VERSION_NUMBER = $versionParts -join '.'
-            Write-Output "VERSION CORRECTED: $VERSION_NUMBER"
+            # Increment the patch number for a prerelease build
+            $VERSIONPARTS = $VERSIONNUMBER -split '\.'
+            $VERSIONPARTS[2] = [int]$VERSIONPARTS[2] + 1
+            $VERSIONNUMBER = $VERSIONPARTS -join '.'
+            Write-Output "VERSION CORRECTED, versionNumber: $VERSIONNUMBER"
 
-            # Add SP info
-            $DISTANCE_PADDED = $DISTANCE.ToString().PadLeft(3, '0')
-            Write-Output "DISTANCE_PADDED: $DISTANCE_PADDED"
-            $VERSION = "$VERSION_NUMBER-RC$DISTANCE_PADDED"
+            $VERSION = "$VERSIONNUMBER-rc.$DISTANCE"
         } else {
-            $VERSION = $VERSION_NUMBER
+            $VERSION = $VERSIONNUMBER
         }
 
         # Output the version
