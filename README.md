@@ -1,35 +1,69 @@
-# RabbitMQ-To-REST-API-Forwarder
+# rabbitmq-to-rest-api-forwarder (To-REST-API-Forwarder)
 
 A event-forwarding helper service for the Windows Sound Scanner; see [WinSoundScanner](https://github.com/collect-sound-devices/win-sound-scanner-go).
 
 ## Motivation
 
-RabbitMQ-To-REST-API-Forwarder's purpose is to fetch HTTP request messages from RabbitMQ and forward
+To-REST-API-Forwarder's purpose is to fetch HTTP request messages from RabbitMQ and forward
 them to a configured REST API endpoint.
 
 ## Event Forwarding Pattern
 
-RabbitMQ-To-REST-API-Forwarder implements a message forwarding pattern that includes debouncing
+To-REST-API-Forwarder implements a message forwarding pattern that includes debouncing
 for frequent volume change events and reliable delivery with retry and failed queues.
 
 ```mermaid
-flowchart TD
-    A[["Windows Sound Scanner<br>(WinSoundScanner)"]] ==>|"enqueue HTTP messages"| B["RabbitMQ"]
-    B ==>|"consume"| C["RabbitMqConsumerService<br>(BackgroundService)"]
-    C ==>|"debounce (volume events)"| D["DebounceWorker"]
-    C ==>|"direct forward<br>(other events)"| E["SendToApiAsync"]
-    D ==>|"winner message"| E
-    E ==>|"POST / PUT"| F[["REST API Endpoint"]]
-    E -->|"on failure"| G["Retry Queue<br>(.retry)"]
+flowchart BT
+
+classDef invisibleNode fill:transparent,stroke:transparent;
+classDef dottedBox fill:transparent,fill-opacity:0.55, stroke-dasharray:20 5,stroke-width:2px;
+
+subgraph scannerService["win-sound-scanner-go"]
+    invisible1["<br><br><br><br><br>"]
+    class invisible1 invisibleNode
+	A["WinSoundScanner<br>Go Windows Service"]
+    invisible2["<br><br><br><br><br>"]
+    class invisible2 invisibleNode
+end
+class scannerService dottedBox
+
+
+subgraph forwarder["To-REST-API-Forwarder"]
+    invisible3["<br><br><br><br><br>"]
+    class invisible3 invisibleNode
+	B["RMQ Queue"]
+	C["RabbitMqConsumerService<br>(BackgroundService)"]
+	D["DebounceWorker"]
+	E["SendToApiAsync"]
+	G["RMQ Retry Queue<br>(.retry)"]
+	H["RMQ Failed Queue<br>(.failed)"]
+
+    invisible4["<br><br><br><br><br>"]
+    class invisible4 invisibleNode
+end
+class forwarder dottedBox
+
+
+deviceRepositoryApi["Device Repository Server<br>(REST API)"]
+
+    A -->|"Publish HTTP messages"| B
+	B -->|"Consume"| C
+    C -->|"Debounce (volume events)"| D
+	C -->|"Direct forward<br>(other events)"| E
+    D -->|"winner message"| E
+    E -->|"POST / PUT attempts"| deviceRepositoryApi
+
+
+    E -->|"on failure"| G
     G -->|"TTL expires → re-deliver"| B
-    E -->|"max retries exceeded"| H["Failed Queue<br>(.failed)"]
+    E -->|"max retries exceeded"| H
 ```
 
 ## Functions
 
 - (Background) The Windows Sound Scanner transforms its sound events into HTTP request
   messages and enquies them into a local RabbitMQ message broker
-- RabbitMQ-To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
+- To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
 - It reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
 - It applies debouncing of frequent volume-change PUT-requests.
   * The respective time window is configurable via `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds`.
@@ -40,7 +74,7 @@ flowchart TD
 
 ## Technologies Used
 
-- RabbitMQ-To-REST-API-Forwarder:
+- To-REST-API-Forwarder:
   - **.NET 8 Generic Host Template** builds Windows Console App or Windows Service.
   - **RabbitMQ.Client** library for interacting with RabbitMQ.
   - **NLog** logging library for .NET.
@@ -52,7 +86,7 @@ flowchart TD
 ## Usage
 
 1. Install Docker Desktop on the Sound Windows Agent Windows machine
-2. Download and unzip the latest rollout of RabbitMQ-To-REST-API-Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
+2. Download and unzip the latest rollout of To-REST-API-Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
 3. Create a `logs` folder in the unzipped folder
 4. Use docker-compose to bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine:
    Open a PowerShell prompt in the unzipped folder and run:
@@ -65,21 +99,22 @@ flowchart TD
 1. Install Visual Studio 2022 or the .NET 8 SDK
 2. Restore packages and build the solution:
 
-```powershell
-# Using dotnet CLI
-dotnet build RmqToRestApiForwarder.sln -c Release
-```
+	```powershell
+	# Using dotnet CLI
+	dotnet build RmqToRestApiForwarder.sln -c Release
+	```
 
 3. (Optional) Publish a self-contained single-file for Windows x64:
 
-```powershell
-# Publish with the included publish profile
-dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj" -c Release -p:PublishProfile=WinX64
-```
+	```powershell
+	# Publish with the included publish profile
+	dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj"
+		-c Release -p:PublishProfile=WinX64
+	```
 
 4. Developer Manual
 
-For deeper developer explanations (Podman vs Docker), see: https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/blob/HEAD/PODMAN-vs-DOCKER.md
+For deeper developer explanations (Podman vs Docker), see: [PODMAN-vs-DOCKER.md](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/blob/HEAD/PODMAN-vs-DOCKER.md)
 
 ## Changelog
 
