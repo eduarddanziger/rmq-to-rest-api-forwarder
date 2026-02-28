@@ -1,11 +1,10 @@
 # rabbitmq-to-rest-api-forwarder (To-REST-API-Forwarder)
 
-A event-forwarding helper service for the Windows Sound Scanner; see [WinSoundScanner](https://github.com/collect-sound-devices/win-sound-scanner-go).
+A event-forwarding helper microservice for the Windows Sound Scanner; see [WinSoundScanner](https://github.com/collect-sound-devices/win-sound-scanner-go).
 
 ## Motivation
 
-To-REST-API-Forwarder's purpose is to fetch HTTP request messages from RabbitMQ and forward
-them to a configured REST API endpoint.
+To-REST-API-Forwarder's purpose is to consume messages from RabbitMQ and forward them to a REST API endpoint.
 
 ## Event Forwarding Pattern
 
