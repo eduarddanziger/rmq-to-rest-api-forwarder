@@ -7,10 +7,84 @@ A event-forwarding helper service for the Windows Sound Scanner; see [WinSoundSc
 To-REST-API-Forwarder's purpose is to fetch HTTP request messages from RabbitMQ and forward
 them to a configured REST API endpoint.
 
-## Event Forwarding Pattern
+## Place in *collect-sound-devices* Architecture
+
+<div style="zoom: 0.5;">
+
+```mermaid
+flowchart BT
+
+classDef dottedBox fill:transparent,fill-opacity:0.55, stroke-dasharray:20 5,stroke-width:2px;
+classDef stressedBox fill:#f0f0f0,fill-opacity:0.2,stroke-width:4px;
+classDef invisibleNode fill:transparent,stroke:transparent;
+
+coreAudioApi["Core Audio<br>(Windows API)"]
+
+subgraph scannerBackend["Sound Scanner backend"]
+    invisible3["<br><br><br><br><br>"]
+    class invisible3 invisibleNode
+    goCgoWrapper["SoundLibWrap<br>(Go/CGO module)"]
+    soundAgentApiDll["ANSI C SoundAgentApi.dll,<br>SoundDeviceCollection<br>(C++ class)"]
+    invisible4["<br><br><br><br><br>"]
+    class invisible4 invisibleNode
+end
+class scannerBackend dottedBox
+
+coreAudioApi -->|Device and volume change<br>notifications| soundAgentApiDll
+soundAgentApiDll --> |Read device characteristics| coreAudioApi
+
+subgraph scannerService["<b>win-sound-scanner-go</b>"]
+    invisible1["<br><br><br><br><br>"]
+    class invisible1 invisibleNode
+    winSoundScannerService["WinSoundScanner<br>Go Windows Service"]
+    invisible2["<br><br><br><br><br>"]
+    class invisible2 invisibleNode
+end
+class scannerService dottedBox
+
+subgraph requestQueueMicroservice["Request queue microservice"]
+    requestQueue[("Request Queue<br>(RabbitMQ channel)")]
+    rabbitMqRestForwarder["RabbitMQ-to-REST Forwarder<br>(.NET microservice)"]
+end
+class requestQueueMicroservice stressedBox
+
+deviceRepositoryApi["Device Repository Server<br>(REST API)"]
+
+winSoundScannerService --> |Access device| goCgoWrapper
+goCgoWrapper -->|Device events| winSoundScannerService
+
+goCgoWrapper --> |C API calls| soundAgentApiDll
+soundAgentApiDll -->|C / C++ callbacks| goCgoWrapper
+
+winSoundScannerService -->|Enqueue request messages| requestQueue
+
+requestQueue -->|Fetch request messages| rabbitMqRestForwarder
+rabbitMqRestForwarder --> |Detect request messages| requestQueue
+rabbitMqRestForwarder -->|Forward request messages| deviceRepositoryApi
+```
+</div>
+
+
+
+## Functions
+
+- (Background) The Windows Sound Scanner transforms its sound events into HTTP request
+  messages and enquies them into a local RabbitMQ message broker
+- To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
+- It reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
+- It applies debouncing of frequent volume-change PUT-requests.
+  * The respective time window is configurable via `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds`.
+- It guarantees reliable delivery with delayed retries (*Event Forwarding Pattern*, see below)
+  * It uses retry and failed queues
+  * A message is routed to a failed queue after the retry max is reached
+  * See settings: `RabbitMqMessageDeliverySettings: RetryDelayInSeconds`, `MaxRetryAttempts`.
+
+## Event Forwarding Pattern & Debouncing
 
 To-REST-API-Forwarder implements a message forwarding pattern that includes debouncing
 for frequent volume change events and reliable delivery with retry and failed queues.
+
+<div style="zoom: 0.5;">
 
 ```mermaid
 flowchart BT
@@ -59,17 +133,7 @@ deviceRepositoryApi["Device Repository Server<br>(REST API)"]
     E -->|"max retries exceeded"| H
 ```
 
-## Functions
-
-- (Background) The Windows Sound Scanner transforms its sound events into HTTP request
-  messages and enquies them into a local RabbitMQ message broker
-- To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
-- It reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
-- It applies debouncing of frequent volume-change PUT-requests.
-  * The respective time window is configurable via `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds`.
-- It guarantees reliable delivery with delayed retries
-  * It uses retry and failed queues (the message is routed to a failed queue after the retry max is reached),
-  see settings: `RabbitMqMessageDeliverySettings:RetryDelayInSeconds`, `MaxRetryAttempts`.
+</div>
 
 
 ## Technologies Used
@@ -117,8 +181,7 @@ deviceRepositoryApi["Device Repository Server<br>(REST API)"]
 For deeper developer explanations (Podman vs Docker), see: [PODMAN-vs-DOCKER.md](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/blob/HEAD/PODMAN-vs-DOCKER.md)
 
 ## Changelog
-
-- 2025-12-21: Readme improvements and clarifications.
+- 2026-02-28: Improvements, clarifications, diagrams
 - 2025-12-18: Switched MSBuild inline tasks to RoslynCodeTaskFactory for cross-platform builds (Windows/Linux).
 - 2025-12-18: Replaced legacy tasks with inline regex and zip implementations; fixed warnings and improved Docker publish flow.
 
