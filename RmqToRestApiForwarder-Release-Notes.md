@@ -10,6 +10,11 @@ $version$
 Released on $date$
 ~~~
 
+## Change
+- README: improvements, clarifications, diagrams
+- appsettings.Docker.json removed. The Docker-specific environment variables are now directly in the deployed docker-compose.yml
+
+
 3.4.0
 --------
 ~~~
