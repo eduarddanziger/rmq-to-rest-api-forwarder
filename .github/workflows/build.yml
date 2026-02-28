@@ -61,6 +61,8 @@ jobs:
             $VERSION = $VERSIONNUMBER
         }
 
+        $VERSION = 'v' + $VERSION
+        Write-Output "Derived development version: $VERSION (base tag: $LATEST_TAG)"
         # Output the version
         "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         Write-Output "Using version: $VERSION"    
