@@ -21,7 +21,7 @@ classDef dottedBox fill:transparent,fill-opacity:0.55, stroke-dasharray:20 5,str
 subgraph scannerService["win-sound-scanner-go"]
     invisible1["<br><br><br><br><br>"]
     class invisible1 invisibleNode
-	A["WinSoundScanner<br>Go Windows Service"]
+    A["WinSoundScanner<br>Go Windows Service"]
     invisible2["<br><br><br><br><br>"]
     class invisible2 invisibleNode
 end
@@ -31,12 +31,12 @@ class scannerService dottedBox
 subgraph forwarder["To-REST-API-Forwarder"]
     invisible3["<br><br><br><br><br>"]
     class invisible3 invisibleNode
-	B["RMQ Queue"]
-	C["RabbitMqConsumerService<br>(BackgroundService)"]
-	D["DebounceWorker"]
-	E["SendToApiAsync"]
-	G["RMQ Retry Queue<br>(.retry)"]
-	H["RMQ Failed Queue<br>(.failed)"]
+    B["RMQ Queue"]
+    C["RabbitMqConsumerService<br>(BackgroundService)"]
+    D["DebounceWorker"]
+    E["SendToApiAsync"]
+    G["RMQ Retry Queue<br>(.retry)"]
+    H["RMQ Failed Queue<br>(.failed)"]
 
     invisible4["<br><br><br><br><br>"]
     class invisible4 invisibleNode
@@ -47,9 +47,9 @@ class forwarder dottedBox
 deviceRepositoryApi["Device Repository Server<br>(REST API)"]
 
     A -->|"Publish HTTP messages"| B
-	B -->|"Consume"| C
+    B -->|"Consume"| C
     C -->|"Debounce (volume events)"| D
-	C -->|"Direct forward<br>(other events)"| E
+    C -->|"Direct forward<br>(other events)"| E
     D -->|"winner message"| E
     E -->|"POST / PUT attempts"| deviceRepositoryApi
 
@@ -99,18 +99,18 @@ deviceRepositoryApi["Device Repository Server<br>(REST API)"]
 1. Install Visual Studio 2022 or the .NET 8 SDK
 2. Restore packages and build the solution:
 
-	```powershell
-	# Using dotnet CLI
-	dotnet build RmqToRestApiForwarder.sln -c Release
-	```
+    ```powershell
+    # Using dotnet CLI
+    dotnet build RmqToRestApiForwarder.sln -c Release
+    ```
 
 3. (Optional) Publish a self-contained single-file for Windows x64:
 
-	```powershell
-	# Publish with the included publish profile
-	dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj"
-		-c Release -p:PublishProfile=WinX64
-	```
+    ```powershell
+    # Publish with the included publish profile
+    dotnet publish "Projects/RmqToRestApiForwarder/RmqToRestApiForwarder.csproj"
+        -c Release -p:PublishProfile=WinX64
+    ```
 
 4. Developer Manual
 
