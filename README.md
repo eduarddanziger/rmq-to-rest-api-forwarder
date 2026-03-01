@@ -1,10 +1,10 @@
-# rabbitmq-to-rest-api-forwarder (To-REST-API-Forwarder)
+# rmq-to-rest-api-forwarder (RmqToRestApiForwarder)
 
 A event-forwarding helper microservice for the Windows Sound Scanner; see [WinSoundScanner](https://github.com/collect-sound-devices/win-sound-scanner-go).
 
 ## Motivation
 
-To-REST-API-Forwarder's purpose is to consume messages from RabbitMQ and forward them to a REST API endpoint.
+RmqToRestApiForwarder's purpose is to consume messages from RabbitMQ and forward them to a REST API endpoint.
 
 ## Place in *collect-sound-devices* Architecture
 
@@ -69,7 +69,7 @@ rabbitMqRestForwarder -->|Forward request messages| deviceRepositoryApi
 
 - (Background) The Windows Sound Scanner transforms its sound events into HTTP request
   messages and enquies them into a local RabbitMQ message broker
-- To-REST-API-Forwarder runs as a Docker container on the Sound Windows Agent host machine
+- RmqToRestApiForwarder runs as a Docker container on the Sound Windows Agent host machine
 - It reads from a local RabbitMQ queue and POSTs/PUTs to the configured API base URL
 - It applies debouncing of frequent volume-change PUT-requests.
   * The respective time window is configurable via `RabbitMqMessageDeliverySettings:VolumeChangeEventDebouncingWindowInMilliseconds`.
@@ -80,7 +80,7 @@ rabbitMqRestForwarder -->|Forward request messages| deviceRepositoryApi
 
 ## Event Forwarding Pattern & Debouncing
 
-To-REST-API-Forwarder implements a message forwarding pattern that includes debouncing
+RmqToRestApiForwarder implements a message forwarding pattern that includes debouncing
 for frequent volume change events and reliable delivery with retry and failed queues.
 
 <div style="zoom: 0.5;">
@@ -101,7 +101,7 @@ end
 class scannerService dottedBox
 
 
-subgraph forwarder["To-REST-API-Forwarder"]
+subgraph forwarder["RmqToRestApiForwarder"]
     invisible3["<br><br><br><br><br>"]
     class invisible3 invisibleNode
     B["RMQ Queue"]
@@ -137,7 +137,7 @@ deviceRepositoryApi["Device Repository Server<br>(REST API)"]
 
 ## Technologies Used
 
-- To-REST-API-Forwarder:
+- RmqToRestApiForwarder:
   - **.NET 8 Generic Host Template** builds Windows Console App or Windows Service.
   - **RabbitMQ.Client** library for interacting with RabbitMQ.
   - **NLog** logging library for .NET.
@@ -146,16 +146,16 @@ deviceRepositoryApi["Device Repository Server<br>(REST API)"]
 - RabbitMQ:
   - Distributed as a Docker container, see an Official RabbitMQ Docker image and `docker-compose.yml`.
 
-## Usage
+## Installation
 
 1. Install Docker Desktop on the Sound Windows Agent Windows machine
-2. Download and unzip the latest rollout of To-REST-API-Forwarder: RmqToRestApiForwarder-x.x.x from the latest repository release assets: [Release](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/releases/latest)
-3. Create a `logs` folder in the unzipped folder
-4. Use docker-compose to bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine:
-   Open a PowerShell prompt in the unzipped folder and run:
-  ```powershell
-  docker-compose up -d
-  ```
+2. Download `docker-compose.yml` and release notes `RmqToRestApiForwarder-Release-Notes.md` from the latest release assets [Release](https://github.com/collect-sound-devices/rmq-to-rest-api-forwarder/releases/latest) into a rollout folder.
+3. Create a `logs` subfolder there.
+4. Use docker-compose to bring the RabbitMQ and rmq-to-rest-api-forwarder containers up on the host machine:<br>
+   Open a PowerShell prompt in the rollout folder and run:
+     ```powershell
+     docker-compose up -d
+     ```
 
 ## Developer Environment: How to Build and Run (Windows)
 
@@ -175,12 +175,10 @@ deviceRepositoryApi["Device Repository Server<br>(REST API)"]
         -c Release -p:PublishProfile=WinX64
     ```
 
-4. Developer Manual
-
-For deeper developer explanations (Podman vs Docker), see: [PODMAN-vs-DOCKER.md](https://github.com/eduarddanziger/rmq-to-rest-api-forwarder/blob/HEAD/PODMAN-vs-DOCKER.md)
+4. Podman vs Docker.<br>See: [PODMAN-vs-DOCKER.md](https://github.com/collect-sound-devices/rmq-to-rest-api-forwarder/blob/HEAD/PODMAN-vs-DOCKER.md)
 
 ## Changelog
-- 2026-02-28: Improvements, clarifications, diagrams
+- 2026-02-28: Repository moved to `collect-sound-devices`. Documentaion improvements: fixes, clarifications, diagrams
 - 2025-12-18: Switched MSBuild inline tasks to RoslynCodeTaskFactory for cross-platform builds (Windows/Linux).
 - 2025-12-18: Replaced legacy tasks with inline regex and zip implementations; fixed warnings and improved Docker publish flow.
 
